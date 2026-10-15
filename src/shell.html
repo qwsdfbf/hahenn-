@@ -293,6 +293,8 @@ footer.time {
 .welcome ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .welcome li b { color: #ffd9a3; font-weight: 600; }
 .welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.welcome.textbox { position: fixed; z-index: 60; }
+.welcome textarea { width: 100%; min-height: 10em; resize: vertical; border-radius: 6px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: 12px/1.4 var(--font-data); padding: 8px; }
 .fatal {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -509,6 +511,14 @@ footer.time {
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg"></span><button class="act" type="button" hidden></button></div>
+<div class="welcome textbox" id="scene-text" hidden>
+  <div class="card" role="dialog" aria-labelledby="scene-text-title">
+    <h2 id="scene-text-title">シーンの内容</h2>
+    <p>この文字をコピーしてテキストファイルに保存すると、「ファイルを開く」で読み込めます。</p>
+    <textarea id="scene-text-area" readonly rows="8" aria-label="シーンの内容（JSON）"></textarea>
+    <button class="btn" id="scene-text-close" type="button">閉じる</button>
+  </div>
+</div>
 <!--SCRIPT-->
 </body>
 </html>

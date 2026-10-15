@@ -112,18 +112,23 @@ fn depositRipple(xz: vec2f, impulse: f32, R: u32) {
   let ij = vec2u(clamp(round(uv * f32(R)), vec2f(0.0), vec2f(f32(R))));
   atomicAdd(&rsrc[ij.y * (R + 1u) + ij.x], i32(clamp(impulse, 0.0, 2e-3) * ${RIPPLE_SCALE.toExponential()}));
 }
-// splash of a drop of mass m hitting the surface at speed U, centred at x on the surface: a ring of droplets thrown
-// up and out (the crown) and a few rising straight up from the centre (the jet that follows the crater collapse).
-// The number of droplets follows the mass, so a drop gives the same splash whatever the particle size.
+// splash of a drop of mass m hitting the surface at speed U, centred at x on the surface. Whether the crown breaks
+// up into droplets follows the splashing parameter K = We·Oh^-0.4 of the equivalent drop (threshold about 2100 for
+// a deep pool); above it a ring of droplets is thrown up and out, and a few rise from the centre (the jet that
+// follows the crater collapse). Slower drops only make the jet.
 fn splashCrown(x: vec3f, U: f32, m: f32, id: u32) {
-  if (P.tank.y <= 0.0 || U < 0.8) { return; }
+  if (P.tank.y <= 0.0) { return; }
+  let D = pow(6.0 * m / (3.14159265 * 998.0), 1.0 / 3.0);
+  let We = 998.0 * U * U * D / 0.0728;
+  let Oh = 0.001 / sqrt(998.0 * 0.0728 * D);
+  let K = We * pow(Oh, -0.4);
+  let n = u32(clamp(round(4.0 * (K / 2100.0 - 1.0)), 0.0, 24.0));
+  let nj = select(0u, select(1u, 2u, K > 2100.0), K > 700.0);
+  if (n + nj == 0u) { return; }
   var s = hashU(id * 2654435761u + P.ext.w * 97u + 3u);
-  let share = m / 1.13e-4;
-  let n = u32(clamp(round((6.0 + 6.0 * (U - 0.8)) * share), 2.0, 24.0));
-  let nj = u32(clamp(round(2.0 * share), 1.0, 3.0));
   let base = atomicAdd(&C.wwCount, n + nj);
   let cap = u32(P.tank.z);
-  let r0 = 0.35 * P.origin.w;
+  let r0 = 0.6 * D;
   let ph0 = rnd(&s) * 6.2831853;
   for (var i = 0u; i < n; i++) {
     let k = base + i;

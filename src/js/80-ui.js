@@ -99,7 +99,8 @@ function fileMenu() {
   return [
     { label: '新規（空の水槽）', act: newScene },
     { label: 'ファイルを開く…', act: openFile },
-    { label: 'ファイルに保存', act: saveFile },
+    // pages hosted where downloads are blocked hand the scene over as text instead of a file
+    window.__noDownloads ? { label: 'シーンをコピー（JSON）', act: copyScene } : { label: 'ファイルに保存', act: saveFile },
     { sep: true },
     { grp: 'サンプル' },
     ...PRESETS.map((p) => ({ label: p.label, act: () => loadPreset(p) })),
@@ -284,14 +285,54 @@ function saveFile() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   toast('シーンをファイルに保存しました', 1800);
 }
+function copyScene() {
+  const txt = JSON.stringify(sceneFile(), null, 1);
+  const show = () => {
+    // the text itself, selected, for copying by hand
+    const box = $('scene-text');
+    box.hidden = false;
+    const ta = box.querySelector('textarea');
+    ta.value = txt;
+    ta.focus();
+    ta.select();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => toast('シーンをコピーしました。テキストとして保存し、「ファイルを開く」で読み込めます', 3600), show);
+  } else show();
+}
+$('scene-text-close').addEventListener('click', () => { $('scene-text').hidden = true; });
+// a scene read from a file or from the browser's storage: every field is checked against a fresh item of the same
+// kind, and anything missing or unusable takes that item's value
 function validScene(o) {
   if (!o || !o.scene || !o.scene.tank || !Array.isArray(o.scene.items)) return null;
   const t = o.scene.tank;
   if (![t.w, t.h, t.d].every((x) => Number.isFinite(x) && x > 0)) return null;
-  const items = o.scene.items.filter((it) => it && ['obstacle', 'source', 'block', 'drain'].includes(it.kind) && Array.isArray(it.pos) && it.pos.length === 3 && it.pos.every(Number.isFinite));
-  // fill in fields that an older file may not have, from fresh items of the same kind
   const fresh = { obstacle: (it) => makeObstacle(SHAPES[it.shape] ? it.shape : 'box'), source: () => makeSource(), block: () => makeBlock(), drain: () => makeDrain() };
-  return { tank: { w: clamp(t.w, 0.2, 1.2), h: clamp(t.h, 0.1, 0.6), d: clamp(t.d, 0.15, 1.0) }, items: items.map((it) => { const base = fresh[it.kind](it); return { ...base, ...it, dims: it.dims ? { ...base.dims, ...it.dims } : base.dims }; }) };
+  const num = (v, d) => (Number.isFinite(v) ? v : d);
+  const vec = (v, d) => (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) ? [...v] : d);
+  const items = [];
+  const ids = new Set();
+  for (const it of o.scene.items) {
+    if (!it || !fresh[it.kind]) continue;
+    const base = fresh[it.kind](it);
+    const out = { ...base };
+    for (const [k, v] of Object.entries(base)) {
+      if (k === 'id') continue;
+      if (typeof v === 'number') out[k] = num(it[k], v);
+      else if (typeof v === 'boolean') out[k] = typeof it[k] === 'boolean' ? it[k] : v;
+      else if (typeof v === 'string') out[k] = typeof it[k] === 'string' && it[k] ? it[k] : v;
+      else if (Array.isArray(v)) out[k] = vec(it[k], v);
+      else if (v && typeof v === 'object') out[k] = Object.fromEntries(Object.entries(v).map(([dk, dv]) => [dk, num(it[k] && it[k][dk], dv)]));
+    }
+    if (it.kind === 'obstacle') { out.shape = base.shape; if (!MATERIALS[out.material]) out.material = base.material; }
+    if (it.kind === 'source' && !SOURCE_MODES[out.mode]) out.mode = base.mode;
+    out.id = Number.isInteger(it.id) && it.id > 0 && !ids.has(it.id) ? it.id : null;
+    if (out.id !== null) ids.add(out.id);
+    items.push(out);
+  }
+  let next = Math.max(0, ...ids) + 1;
+  for (const it of items) if (it.id === null) it.id = next++;
+  return { tank: { w: clamp(t.w, 0.2, 1.2), h: clamp(t.h, 0.1, 0.6), d: clamp(t.d, 0.15, 1.0) }, items };
 }
 function openFile() {
   const inp = document.createElement('input');
@@ -931,7 +972,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key;
   if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
+  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); if (window.__noDownloads) copyScene(); else saveFile(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'o' || k === 'O')) { e.preventDefault(); openFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (editor.modal) {

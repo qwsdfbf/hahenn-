@@ -293,6 +293,8 @@ footer.time {
 .welcome ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .welcome li b { color: #ffd9a3; font-weight: 600; }
 .welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.welcome.textbox { position: fixed; z-index: 60; }
+.welcome textarea { width: 100%; min-height: 10em; resize: vertical; border-radius: 6px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: 12px/1.4 var(--font-data); padding: 8px; }
 .fatal {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -509,6 +511,14 @@ footer.time {
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg"></span><button class="act" type="button" hidden></button></div>
+<div class="welcome textbox" id="scene-text" hidden>
+  <div class="card" role="dialog" aria-labelledby="scene-text-title">
+    <h2 id="scene-text-title">シーンの内容</h2>
+    <p>この文字をコピーしてテキストファイルに保存すると、「ファイルを開く」で読み込めます。</p>
+    <textarea id="scene-text-area" readonly rows="8" aria-label="シーンの内容（JSON）"></textarea>
+    <button class="btn" id="scene-text-close" type="button">閉じる</button>
+  </div>
+</div>
 <script>
 'use strict';
 (async () => {
@@ -1635,18 +1645,23 @@ fn depositRipple(xz: vec2f, impulse: f32, R: u32) {
   let ij = vec2u(clamp(round(uv * f32(R)), vec2f(0.0), vec2f(f32(R))));
   atomicAdd(&rsrc[ij.y * (R + 1u) + ij.x], i32(clamp(impulse, 0.0, 2e-3) * ${RIPPLE_SCALE.toExponential()}));
 }
-// splash of a drop of mass m hitting the surface at speed U, centred at x on the surface: a ring of droplets thrown
-// up and out (the crown) and a few rising straight up from the centre (the jet that follows the crater collapse).
-// The number of droplets follows the mass, so a drop gives the same splash whatever the particle size.
+// splash of a drop of mass m hitting the surface at speed U, centred at x on the surface. Whether the crown breaks
+// up into droplets follows the splashing parameter K = We·Oh^-0.4 of the equivalent drop (threshold about 2100 for
+// a deep pool); above it a ring of droplets is thrown up and out, and a few rise from the centre (the jet that
+// follows the crater collapse). Slower drops only make the jet.
 fn splashCrown(x: vec3f, U: f32, m: f32, id: u32) {
-  if (P.tank.y <= 0.0 || U < 0.8) { return; }
+  if (P.tank.y <= 0.0) { return; }
+  let D = pow(6.0 * m / (3.14159265 * 998.0), 1.0 / 3.0);
+  let We = 998.0 * U * U * D / 0.0728;
+  let Oh = 0.001 / sqrt(998.0 * 0.0728 * D);
+  let K = We * pow(Oh, -0.4);
+  let n = u32(clamp(round(4.0 * (K / 2100.0 - 1.0)), 0.0, 24.0));
+  let nj = select(0u, select(1u, 2u, K > 2100.0), K > 700.0);
+  if (n + nj == 0u) { return; }
   var s = hashU(id * 2654435761u + P.ext.w * 97u + 3u);
-  let share = m / 1.13e-4;
-  let n = u32(clamp(round((6.0 + 6.0 * (U - 0.8)) * share), 2.0, 24.0));
-  let nj = u32(clamp(round(2.0 * share), 1.0, 3.0));
   let base = atomicAdd(&C.wwCount, n + nj);
   let cap = u32(P.tank.z);
-  let r0 = 0.35 * P.origin.w;
+  let r0 = 0.6 * D;
   let ph0 = rnd(&s) * 6.2831853;
   for (var i = 0u; i < n; i++) {
     let k = base + i;
@@ -4970,7 +4985,8 @@ function fileMenu() {
   return [
     { label: '新規（空の水槽）', act: newScene },
     { label: 'ファイルを開く…', act: openFile },
-    { label: 'ファイルに保存', act: saveFile },
+    // pages hosted where downloads are blocked hand the scene over as text instead of a file
+    window.__noDownloads ? { label: 'シーンをコピー（JSON）', act: copyScene } : { label: 'ファイルに保存', act: saveFile },
     { sep: true },
     { grp: 'サンプル' },
     ...PRESETS.map((p) => ({ label: p.label, act: () => loadPreset(p) })),
@@ -5155,14 +5171,54 @@ function saveFile() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   toast('シーンをファイルに保存しました', 1800);
 }
+function copyScene() {
+  const txt = JSON.stringify(sceneFile(), null, 1);
+  const show = () => {
+    // the text itself, selected, for copying by hand
+    const box = $('scene-text');
+    box.hidden = false;
+    const ta = box.querySelector('textarea');
+    ta.value = txt;
+    ta.focus();
+    ta.select();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => toast('シーンをコピーしました。テキストとして保存し、「ファイルを開く」で読み込めます', 3600), show);
+  } else show();
+}
+$('scene-text-close').addEventListener('click', () => { $('scene-text').hidden = true; });
+// a scene read from a file or from the browser's storage: every field is checked against a fresh item of the same
+// kind, and anything missing or unusable takes that item's value
 function validScene(o) {
   if (!o || !o.scene || !o.scene.tank || !Array.isArray(o.scene.items)) return null;
   const t = o.scene.tank;
   if (![t.w, t.h, t.d].every((x) => Number.isFinite(x) && x > 0)) return null;
-  const items = o.scene.items.filter((it) => it && ['obstacle', 'source', 'block', 'drain'].includes(it.kind) && Array.isArray(it.pos) && it.pos.length === 3 && it.pos.every(Number.isFinite));
-  // fill in fields that an older file may not have, from fresh items of the same kind
   const fresh = { obstacle: (it) => makeObstacle(SHAPES[it.shape] ? it.shape : 'box'), source: () => makeSource(), block: () => makeBlock(), drain: () => makeDrain() };
-  return { tank: { w: clamp(t.w, 0.2, 1.2), h: clamp(t.h, 0.1, 0.6), d: clamp(t.d, 0.15, 1.0) }, items: items.map((it) => { const base = fresh[it.kind](it); return { ...base, ...it, dims: it.dims ? { ...base.dims, ...it.dims } : base.dims }; }) };
+  const num = (v, d) => (Number.isFinite(v) ? v : d);
+  const vec = (v, d) => (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) ? [...v] : d);
+  const items = [];
+  const ids = new Set();
+  for (const it of o.scene.items) {
+    if (!it || !fresh[it.kind]) continue;
+    const base = fresh[it.kind](it);
+    const out = { ...base };
+    for (const [k, v] of Object.entries(base)) {
+      if (k === 'id') continue;
+      if (typeof v === 'number') out[k] = num(it[k], v);
+      else if (typeof v === 'boolean') out[k] = typeof it[k] === 'boolean' ? it[k] : v;
+      else if (typeof v === 'string') out[k] = typeof it[k] === 'string' && it[k] ? it[k] : v;
+      else if (Array.isArray(v)) out[k] = vec(it[k], v);
+      else if (v && typeof v === 'object') out[k] = Object.fromEntries(Object.entries(v).map(([dk, dv]) => [dk, num(it[k] && it[k][dk], dv)]));
+    }
+    if (it.kind === 'obstacle') { out.shape = base.shape; if (!MATERIALS[out.material]) out.material = base.material; }
+    if (it.kind === 'source' && !SOURCE_MODES[out.mode]) out.mode = base.mode;
+    out.id = Number.isInteger(it.id) && it.id > 0 && !ids.has(it.id) ? it.id : null;
+    if (out.id !== null) ids.add(out.id);
+    items.push(out);
+  }
+  let next = Math.max(0, ...ids) + 1;
+  for (const it of items) if (it.id === null) it.id = next++;
+  return { tank: { w: clamp(t.w, 0.2, 1.2), h: clamp(t.h, 0.1, 0.6), d: clamp(t.d, 0.15, 1.0) }, items };
 }
 function openFile() {
   const inp = document.createElement('input');
@@ -5802,7 +5858,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key;
   if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
+  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); if (window.__noDownloads) copyScene(); else saveFile(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'o' || k === 'O')) { e.preventDefault(); openFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (editor.modal) {
