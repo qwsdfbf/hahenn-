@@ -43,7 +43,8 @@ function sourceEmits(sim, dt, t) {
       const n = Math.max(1, Math.round(V / Vp));
       const R = Math.max(d / 2, Math.cbrt((3 * n * Vp) / (4 * Math.PI)) * 0.9);
       const p = v3.add(src.pos, v3.mul(dir, R + 0.002));
-      add({ shape: 1, a: [...p, n === 1 ? 0 : R], b: [...v3.mul(dir, src.speed), 0], count: n }, n * Vp * 1000);
+      // drops smaller than a few cells are marked as free-flying so that they splash where they land
+      add({ shape: 1, a: [...p, n === 1 ? 0 : R], b: [...v3.mul(dir, src.speed), n <= 8 ? 1 : 0], count: n }, n * Vp * 1000);
     } else if (src.mode === 'burst') {
       if (st.fired) {
         if (!(src.burstEvery > 0)) continue;
@@ -52,11 +53,8 @@ function sourceEmits(sim, dt, t) {
       }
       st.fired = true;
       st.timer = src.burstEvery > 0 ? src.burstEvery : 0;
-      const V = clamp(src.burst, 0.01, 50) / 1000;
-      const n = Math.max(1, Math.round(V / Vp));
-      const R = Math.cbrt((3 * V) / (4 * Math.PI));
-      const p = v3.add(src.pos, v3.mul(dir, R + 0.004));
-      add({ shape: 1, a: [...p, R], b: [...v3.mul(dir, src.speed), 0], count: n }, n * Vp * 1000);
+      const e = burstEmit(sim, src);
+      add(e, e.count * Vp * 1000);
     } else if (src.mode === 'rain') {
       const side = clamp(src.rainSize, 0.05, 2);
       const flux = (clamp(src.rainRate, 1, 500) / 3.6e6) * side * side;
@@ -70,11 +68,22 @@ function sourceEmits(sim, dt, t) {
   return list;
 }
 
-// lattice fills for the water blocks (used when the simulation is reset)
-function blockEmits(sim) {
+// one release of a "burst" source: a ball of water in front of the outlet
+function burstEmit(sim, src) {
+  const dir = sourceDir(src);
+  const V = clamp(src.burst, 0.01, 50) / 1000;
+  const n = Math.max(1, Math.round(V / sim.vp));
+  const R = Math.cbrt((3 * V) / (4 * Math.PI));
+  const p = v3.add(src.pos, v3.mul(dir, R + 0.004));
+  return { shape: 1, a: [...p, R], b: [...v3.mul(dir, src.speed), 0], count: n };
+}
+
+// lattice fills for water blocks: all of them when the simulation is reset, or one block poured into the running
+// simulation (`fill`: lattice points in cells that already hold water are skipped)
+function blockEmits(sim, items = scene.items, fill = false) {
   const list = [];
   const sp = sim.h / 2;
-  for (const b of scene.items) {
+  for (const b of items) {
     if (b.kind !== 'block') continue;
     const lo = [b.pos[0] - b.dims.w / 2, b.pos[1] - b.dims.h / 2, b.pos[2] - b.dims.d / 2];
     const hi = [b.pos[0] + b.dims.w / 2, b.pos[1] + b.dims.h / 2, b.pos[2] + b.dims.d / 2];
@@ -91,7 +100,14 @@ function blockEmits(sim) {
     if (total <= 0) continue;
     // centre the lattice inside the clipped box
     const start = [0, 1, 2].map((k) => lo[k] + ((hi[k] - lo[k]) - n[k] * sp) / 2);
-    list.push({ shape: 2, a: [...start, sp], b: [n[0], n[1], n[2], 0], c: [0, 0, 0, 0], count: total });
+    list.push({ shape: 2, a: [...start, sp], b: [n[0], n[1], n[2], fill ? 1 : 0], c: [0, 0, 0, 0], count: total });
   }
   return list;
+}
+
+// volume of a block that lies inside the tank [L]
+function blockLiters(b) {
+  const t = scene.tank;
+  const ext = (c, half, lo, hi) => Math.max(0, Math.min(c + half, hi) - Math.max(c - half, lo));
+  return ext(b.pos[0], b.dims.w / 2, -t.w / 2, t.w / 2) * ext(b.pos[1], b.dims.h / 2, 0, t.h) * ext(b.pos[2], b.dims.d / 2, -t.d / 2, t.d / 2) * 1000;
 }

@@ -2,15 +2,6 @@
 //  Main loop and start-up
 // ============================================================
 let sim = null;
-FluidSim.prototype.emitNow = function (list) {
-  for (let i = 0; i < list.length; i += MAX_EMIT) {
-    const total = this.writeEmits(list.slice(i, i + MAX_EMIT));
-    if (!total) continue;
-    const enc = device.createCommandEncoder();
-    this.encodeEmit(enc, total);
-    device.queue.submit([enc.finish()]);
-  }
-};
 function rebuildSim(refill) {
   if (sim) sim.destroy();
   sim = new FluidSim(scene.tank, settings.quality);
@@ -19,11 +10,12 @@ function rebuildSim(refill) {
   pBGCache.key = null;
   refreshPanels();
 }
-function resetSim() {
+// water and time back to the start: the water blocks are filled again, sources start over
+function resetSim(quiet) {
   sim.clearWater();
   sim.setObjects(scene.items, 0);
   sim.emitNow(blockEmits(sim));
-  toast('最初の状態に戻しました', 1400);
+  if (!quiet) toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 2000);
 }
 
 // ---------- sizing ----------
@@ -46,24 +38,22 @@ function doResize() {
 let last = performance.now();
 const perf = { t: 0, frames: 0, shown: 0, acc: 0, n: 0, checked: false, touched: false };
 function updateStats(realDt) {
-  perf.acc += realDt; perf.n++;
   perf.shown += realDt;
-  if (perf.shown < 0.25) return;
-  const fps = perf.n / perf.acc;
-  perf.shown = 0; perf.acc = 0; perf.n = 0;
-  $('t-time').textContent = sim.time.toFixed(2) + ' s';
-  $('t-water').textContent = sim.waterLiters.toFixed(2) + ' L';
+  if (perf.shown < 0.2 && (settings.playing || stepShown === sim.time)) return;
+  perf.shown = 0;
+  stepShown = sim.time;
+  for (const el of document.querySelectorAll('[data-info="time"]')) el.textContent = timeText(sim.time);
+  for (const el of document.querySelectorAll('[data-info="water"]')) el.textContent = sim.waterLiters.toFixed(2) + ' L';
   const ratio = sim.count / sim.cap;
-  const meter = $('t-meter');
-  meter.firstChild.style.width = `${Math.min(ratio, 1) * 100}%`;
-  meter.classList.toggle('full', ratio > 0.9);
-  $('t-fps').textContent = Number.isFinite(fps) ? Math.round(fps) + ' fps' : '--';
+  const cap = document.querySelector('[data-info="cap"]');
+  cap.textContent = ratio >= 0.5 ? `（計算できる量の ${Math.round(Math.min(ratio, 1) * 100)}%）` : '';
+  cap.classList.toggle('full', ratio > 0.9);
   const st = $('status');
-  if (sim.full) { st.hidden = false; st.innerHTML = '<b>水の量が上限です。</b>排水口を置くか、水槽の設定で水を消してください。'; }
-  else if (editor.modal) st.hidden = true;
-  else st.hidden = true;
+  st.hidden = !sim.full;
+  if (sim.full) st.innerHTML = '<b>水の量が計算できる上限です。</b>排水口を置くか、水槽の設定で水を消してください。';
   liveRefresh();
 }
+let stepShown = -1;
 // the solver only advances once the GPU has finished its previous step, so slow devices never build a backlog
 let simBusy = false;
 let frameCount = 0;
@@ -108,16 +98,16 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev
   let loaded = false;
   const saved = store.get('suiri-lab-scene');
   if (saved) {
-    try {
-      const o = JSON.parse(saved);
-      if (o && o.v === 1 && o.scene && Array.isArray(o.scene.items) && o.scene.tank) {
-        scene.tank = o.scene.tank;
-        scene.items = o.scene.items;
-        uid = Math.max(1, ...scene.items.map((i) => (i.id | 0) + 1));
-        if (o.cam) Object.assign(cam, o.cam);
-        loaded = true;
-      }
-    } catch (e) { loaded = false; }
+    let o = null;
+    try { o = JSON.parse(saved); } catch (e) { o = null; }
+    const s = validScene(o);
+    if (s) {
+      scene.tank = s.tank;
+      scene.items = s.items;
+      uid = Math.max(1, ...scene.items.map((i) => (i.id | 0) + 1));
+      if (o.cam && Array.isArray(o.cam.target) && [o.cam.dist, o.cam.az, o.cam.el].every(Number.isFinite)) Object.assign(cam, o.cam);
+      loaded = true;
+    }
   }
   if (!loaded) {
     const s = PRESETS[0].make();
@@ -135,14 +125,17 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev
   setPlaying(!window.__pauseAtBoot);
   setSpeed(1);
   setTool('move');
-  updateHint();
+  selectionChanged();
+  updateSheetSizeButton();
+  if (store.get('suiri-lab-welcome') !== '1' && !window.__noWelcome) showWelcome();
   requestAnimationFrame(frame);
 })();
 
 window.suiriLab = {
   scene, settings, cam, editor,
   sim: () => sim,
-  select, loadPreset: (id) => loadPreset(PRESETS.find((p) => p.id === id), true),
+  select, selectedId: () => selectedId, undo, redo,
+  loadPreset: (id) => loadPreset(PRESETS.find((p) => p.id === id), true),
   addItem, resetSim,
   async run(seconds, dt = 1 / 120) {
     setPlaying(false);
@@ -191,6 +184,10 @@ window.suiriLab = {
   noRippleMask() { sim.ripple.bg.maskBuild = null; },
   stats: () => ({ frames: frameCount, impacts: sim.impacts, count: sim.count, ww: sim.wwCount, vmax: sim.vmax, time: sim.time, liters: sim.waterLiters, grid: [sim.nx, sim.ny, sim.nz], gpuErrors }),
   noAutoQuality() { perf.checked = true; },
+  // page coordinates of a world point and of the selected item's gizmo handles (for automated checks)
+  screen(p) { const q = project(p); const [x, y] = clientFromLocal([q.x, q.y]); return { x, y, ok: q.ok }; },
+  pick(x, y) { const r = gpuCanvas.getBoundingClientRect(); const it = pickItem(x - r.left, y - r.top); return it === 'tank' ? 'tank' : it ? it.id : null; },
+  handles() { const it = selected(); return it ? gizmoHandles(it).map((h) => { const a = h.b || h.a; const [x, y] = clientFromLocal([a.x, a.y]); return { type: h.type, i: h.i, ci: h.ci, x, y }; }) : []; },
   async idle() { await device.queue.onSubmittedWorkDone(); },
   setPlaying,
 };

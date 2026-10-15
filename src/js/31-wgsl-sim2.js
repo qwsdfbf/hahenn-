@@ -180,14 +180,16 @@ fn splashCrown(x: vec3f, U: f32, m: f32, id: u32) {
   // cells it enters are dominated by the liquid's own particles, so FLIP would carry it straight through the pool.
   // It merges with the liquid instead. The momentum it brings becomes a pressure impulse on the surface (ripple layer)
   // and a crown splash, and from then on it moves with the liquid around it.
-  // vel.w marks a particle that has been flying free (alone in its neighbourhood) since it last belonged to liquid.
+  // vel.w marks a particle that has been flying free since it last belonged to liquid: alone in its neighbourhood with
+  // nothing following it from above. Particles inside a falling stream never get the mark, so a stream pours into
+  // the pool through the grid while its leading drop and the drops it breaks into still splash.
+  // Drops and rain are emitted with the mark; above the grid nothing can be checked, so the mark is kept as it is.
   let c0 = vec3i(g);
   var airborne = p.vel.w;
-  if (!ing) { airborne = 1.0; }
-  else {
+  if (ing) {
     let n0 = countAt(c0);
     if (n0 >= 4u) { airborne = 0.0; }
-    else if (n0 <= 2u) {
+    else if (n0 <= 2u && c0.y + 2 < NY() && countAt(c0 + vec3i(0, 1, 0)) == 0u && countAt(c0 + vec3i(0, 2, 0)) == 0u) {
       var around = 0u;
       for (var dz = -1; dz <= 1; dz++) {
         for (var dy = -1; dy <= 1; dy++) {
@@ -246,6 +248,7 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
 @group(0) @binding(2) var<storage, read_write> C: Counters;
 @group(0) @binding(3) var<storage, read> E: array<Emit>;
 @group(0) @binding(4) var<uniform> EI: vec4u;
+@group(0) @binding(6) var<storage, read> cellCount: array<u32>;
 ` + WGSL_SDF(5) + /* wgsl */`
 @compute @workgroup_size(256) fn main(@builtin(global_invocation_id) gid: vec3u) {
   let t = gid.x;
@@ -259,6 +262,7 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
   var s = hashU(t * 747796405u + em.info.z * 2891336453u + 1u);
   var pos = vec3f(0.0);
   var vel = vec3f(0.0);
+  var mark = 0.0;
   let shape = em.info.w;
   if (shape == 0u) {
     let rr = em.a.w * sqrt(rnd(&s));
@@ -278,19 +282,27 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
     dd = normalize(dd + vec3f(1e-4));
     pos = em.a.xyz + dd * em.a.w * pow(rnd(&s), 0.3333);
     vel = em.b.xyz;
+    mark = em.b.w;
   } else if (shape == 2u) {
     let nx = u32(em.b.x); let ny = u32(em.b.y);
     let i = local % nx; let j = (local / nx) % ny; let k = local / (nx * ny);
     let jit = (vec3f(rnd(&s), rnd(&s), rnd(&s)) - vec3f(0.5)) * 0.3;
     pos = em.a.xyz + (vec3f(f32(i), f32(j), f32(k)) + vec3f(0.5) + jit) * em.a.w;
     vel = em.c.xyz;
+    // pouring into the running simulation: leave cells that are already at least half full of water alone
+    let g = gridPos(pos);
+    if (em.b.w > 0.5 && inGrid(g)) {
+      let c = vec3i(g);
+      if (f32(cellCount[cellIdx(c.x, c.y, c.z)]) >= 0.5 * P.phys2.x) { parts[idx] = Particle(vec4f(pos, 0.0), vec4f(0.0)); return; }
+    }
   } else {
     pos = em.a.xyz + vec3f((rnd(&s) * 2.0 - 1.0) * em.a.w, -rnd(&s) * em.d.w, (rnd(&s) * 2.0 - 1.0) * em.a.w);
     vel = em.b.xyz;
+    mark = 1.0;
   }
   var alive = 1.0;
   if (sceneSdf(pos) < 0.0) { alive = 0.0; }
-  parts[idx] = Particle(vec4f(pos, alive), vec4f(vel, 0.0));
+  parts[idx] = Particle(vec4f(pos, alive), vec4f(vel, mark));
 }`;
 
 const WGSL_COMPACT = WGSL_SIM_COMMON + WGSL_COUNTERS + /* wgsl */`

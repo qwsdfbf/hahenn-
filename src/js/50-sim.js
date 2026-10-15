@@ -99,7 +99,7 @@ class FluidSim {
       pressure: [0, 1].map((p) => bindGroup(PIPES.pressure, { 0: Pb, 1: this.frac, 2: this.cellType, 3: this.divg, 4: this.pres, 5: this.parity[p] })),
       project: bindGroup(PIPES.project, { 0: Pb, 1: this.vel, 2: this.frac, 3: this.svel, 4: this.cellType, 5: this.pres }),
       g2p: [0, 1].map((c) => [0, 1].map((w) => bindGroup(PIPES.g2p, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.vel, 4: this.velOld, 5: this.objs, 6: this.cellCount, 7: this.ww[w], 8: this.ripple.src }))),
-      emit: [0, 1].map((c) => bindGroup(PIPES.emit, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.emits, 4: this.emitU, 5: this.objs })),
+      emit: [0, 1].map((c) => bindGroup(PIPES.emit, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.emits, 4: this.emitU, 5: this.objs, 6: this.cellCount })),
       compact: [0, 1].map((c) => bindGroup(PIPES.compact, { 0: Pb, 1: this.parts[c], 2: this.parts[1 - c], 3: this.counters })),
       count: this.countU.map((u) => bindGroup(PIPES.count, { 0: Pb, 1: this.counters, 2: this.args, 3: u })),
       ww: [0, 1].map((w) => bindGroup(PIPES.ww, { 0: Pb, 1: this.ww[w], 2: this.ww[1 - w], 3: this.counters, 4: this.vel, 5: this.cellCount, 6: this.objs, 7: this.wwU, 8: this.ripple.src })),
@@ -207,6 +207,26 @@ class FluidSim {
       this.count += off;
     }
     return off;
+  }
+
+  // emissions outside the time stepping (water blocks at a reset, or poured in while running)
+  emitNow(list, fill) {
+    for (let i = 0; i < list.length; i += MAX_EMIT) {
+      const total = this.writeEmits(list.slice(i, i + MAX_EMIT));
+      if (!total) continue;
+      const enc = device.createCommandEncoder();
+      if (fill) {
+        // fresh per-cell particle counts, so that the pour only fills cells without water
+        this.encodeCount(enc, 0);
+        enc.clearBuffer(this.acc);
+        enc.clearBuffer(this.cellCount);
+        const pass = enc.beginComputePass();
+        pass.setPipeline(PIPES.p2g); pass.setBindGroup(0, this.bg.p2g[this.cur]); pass.dispatchWorkgroupsIndirect(this.args, 0);
+        pass.end();
+      }
+      this.encodeEmit(enc, total);
+      device.queue.submit([enc.finish()]);
+    }
   }
 
   encodeEmit(enc, total) {

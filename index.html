@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
 <style>
-/* Layout: a 3D editor shell — header across the top, tool strip at left, viewport centre, scene list + properties at right, transport along the bottom. */
+/* Layout: a 3D editor shell — header across the top, tool strip at left, viewport centre, scene list + properties at right, transport along the bottom.
+   On narrow screens the tools become a row under the header and the panel becomes a sheet between the viewport and the transport. */
 :root {
   --bg: #16191c;
   --panel: #23272b;
@@ -17,21 +18,23 @@
   --line: #3a4046;
   --line-soft: #30353a;
   --text: #e4e8ea;
-  --muted: #98a2a8;
+  --muted: #a3acb2;
   --accent: #f2a43a;
   --accent-ink: #20160a;
   --water: #5fb4e6;
   --danger: #e2645a;
+  --ctl: 30px;
   --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
+@media (pointer: coarse) { :root { --ctl: 44px; } }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0; overflow: hidden;
   background: var(--bg); color: var(--text);
-  font: 13px/1.4 var(--font-body);
+  font: 13.5px/1.45 var(--font-body);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -39,8 +42,8 @@ button { font: inherit; color: inherit; }
 .app {
   height: 100%;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 300px;
-  grid-template-rows: 42px minmax(0, 1fr) 46px;
+  grid-template-columns: 62px minmax(0, 1fr) 320px;
+  grid-template-rows: 44px minmax(0, 1fr) 50px;
   grid-template-areas: "head head head" "tools view side" "time time time";
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
@@ -48,42 +51,46 @@ button { font: inherit; color: inherit; }
 header.head {
   grid-area: head;
   display: flex; align-items: center; gap: 4px;
-  padding-inline: max(10px, env(safe-area-inset-left, 0px)) max(10px, env(safe-area-inset-right, 0px));
+  padding-inline: 10px;
   background: var(--panel); border-bottom: 1px solid var(--line);
   min-width: 0;
 }
-.brand { font-weight: 600; letter-spacing: 0.08em; margin-right: 12px; white-space: nowrap; }
+.brand { font-weight: 600; letter-spacing: 0.08em; margin-right: 10px; white-space: nowrap; }
 .brand b { color: var(--water); font-weight: 600; }
 .spacer { flex: 1; }
 .menu { position: relative; }
 .mbtn, .ibtn {
-  height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
+  height: var(--ctl); min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
   background: transparent; cursor: pointer; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .mbtn:hover, .ibtn:hover, .mbtn[aria-expanded="true"] { background: var(--panel-2); }
-.ibtn { width: 30px; padding: 0; justify-content: center; }
+.ibtn { width: var(--ctl); padding: 0; justify-content: center; }
 .ibtn svg, .mbtn svg { width: 16px; height: 16px; flex: none; }
-.ibtn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+.ibtn:disabled, .mbtn:disabled { opacity: 0.35; cursor: default; background: transparent; }
 .dropdown {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
-  min-width: 210px; padding: 6px;
+  min-width: 230px; max-height: calc(100vh - 70px); overflow-y: auto; padding: 6px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
   display: grid; gap: 1px;
 }
 .dropdown[hidden] { display: none; }
-.dropdown .grp { padding: 6px 8px 3px; font-size: 11px; letter-spacing: 0.1em; color: var(--muted); }
+.dropdown .grp { padding: 6px 8px 3px; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
 .dropdown button {
-  display: flex; align-items: center; gap: 9px; width: 100%;
-  padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--ctl);
+  padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
 }
 .dropdown button:hover, .dropdown button:focus-visible { background: rgba(242,164,58,0.16); outline: none; }
-.dropdown button .k { margin-left: auto; color: var(--muted); font: 11px var(--font-data); }
-.dropdown button svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.dropdown button .k { margin-left: auto; color: var(--muted); font: 11.5px var(--font-data); }
+.dropdown button .sub { display: block; font-size: 11.5px; color: var(--muted); }
+.dropdown button svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .dropdown .sep { height: 1px; background: var(--line); margin: 4px 2px; }
 .dropdown .check::before { content: ""; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; flex: none; }
 .dropdown .check[aria-checked="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--panel-2); }
+.dropdown .radio::before { content: ""; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 50%; flex: none; }
+.dropdown .radio[aria-checked="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--panel-2); }
+@media (pointer: coarse) { .dropdown button .k { display: none; } }
 
 nav.tools {
   grid-area: tools;
@@ -92,150 +99,200 @@ nav.tools {
   background: var(--panel); border-right: 1px solid var(--line);
 }
 .tbtn {
-  width: 36px; height: 36px; border: 0; border-radius: 7px;
-  background: transparent; cursor: pointer; display: grid; place-items: center;
+  width: 52px; height: 50px; border: 0; border-radius: 7px; white-space: nowrap;
+  background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: 11px; line-height: 1.1; color: var(--text);
 }
-.tbtn svg { width: 20px; height: 20px; }
+.tbtn svg { width: 20px; height: 20px; flex: none; }
 .tbtn:hover { background: var(--panel-2); }
 .tbtn[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
-nav.tools .sep { width: 24px; height: 1px; background: var(--line); margin: 4px 0; }
+.tbtn[aria-disabled="true"], .tbtn:disabled { opacity: 0.35; cursor: default; }
+.tbtn[aria-disabled="true"]:hover, .tbtn:disabled:hover { background: transparent; }
+.tbtn[aria-checked="true"][aria-disabled="true"] { background: rgba(242,164,58,0.35); }
+nav.tools .sep { width: 30px; height: 1px; background: var(--line); margin: 4px 0; flex: none; }
+.narrow-only { display: none !important; }
 
 .view { grid-area: view; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #0d0f11; }
 .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #gpu { touch-action: none; outline: none; }
 #overlay { pointer-events: none; }
 .view-hint {
-  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 140px);
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 150px);
   padding: 5px 9px; border-radius: 6px;
-  background: rgba(16,19,22,0.72); color: var(--text); font-size: 12px;
+  background: rgba(16,19,22,0.78); color: var(--text); font-size: 12.5px;
   pointer-events: none;
 }
-.view-hint kbd { font: 11px var(--font-data); padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(255,255,255,0.04); }
+.view-hint kbd { font: 11.5px var(--font-data); padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(255,255,255,0.05); }
 .view-status {
-  position: absolute; left: 10px; top: 10px;
-  padding: 4px 8px; border-radius: 6px; background: rgba(16,19,22,0.72);
-  font: 12px var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted);
+  position: absolute; left: 10px; top: 10px; max-width: calc(100% - 140px);
+  padding: 6px 10px; border-radius: 6px; background: rgba(16,19,22,0.85);
+  font-size: 13px; color: var(--text);
   pointer-events: none;
 }
-.view-status b { color: var(--text); font-weight: 500; }
+.view-status b { color: #ffd9a3; font-weight: 600; }
+.view-info { display: none; }
 .navpad {
   position: absolute; right: 10px; top: 10px;
   display: grid; justify-items: center; gap: 6px;
 }
 .navball { width: 84px; height: 84px; border-radius: 50%; background: rgba(16,19,22,0.35); cursor: grab; touch-action: none; }
 .navball:hover { background: rgba(16,19,22,0.55); }
-.navbtns { display: flex; flex-direction: column; gap: 4px; }
+.navbtns { display: flex; flex-direction: column; gap: 5px; }
 .navbtns button {
-  width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: grab; touch-action: none;
-  background: rgba(16,19,22,0.6); display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; touch-action: manipulation;
+  background: rgba(16,19,22,0.7); display: grid; place-items: center;
 }
-.navbtns button:hover { background: rgba(40,46,52,0.9); }
+.navbtns button:hover { background: rgba(40,46,52,0.95); }
+.navbtns button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .navbtns svg { width: 17px; height: 17px; }
 
 aside.side {
   grid-area: side; min-height: 0;
-  display: grid; grid-template-rows: minmax(110px, 34%) minmax(0, 1fr);
+  display: grid; grid-template-rows: minmax(96px, 28%) 6px minmax(0, 1fr);
   background: var(--panel); border-left: 1px solid var(--line);
 }
+.split { cursor: row-resize; touch-action: none; background: var(--line-soft); border-top: 1px solid var(--line); }
+.split:hover { background: var(--line); }
+.sheet-head { display: none; }
 .side-sec { min-height: 0; display: flex; flex-direction: column; }
-.side-sec + .side-sec { border-top: 1px solid var(--line); }
 .sec-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 7px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 36px;
+  padding: 4px 6px 4px 10px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);
   border-bottom: 1px solid var(--line-soft);
 }
-.scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-width: thin; }
+.sec-head .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-head .acts { display: flex; gap: 2px; flex: none; }
+.sec-head .acts button { height: 28px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.sec-head .acts button:hover { border-color: var(--line); }
+.sec-head .acts button.danger { color: #ffb4ae; }
+.sec-head .acts svg { width: 14px; height: 14px; }
+.scroll {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-width: thin;
+  background:
+    linear-gradient(var(--panel) 30%, rgba(35,39,43,0)) top / 100% 24px no-repeat local,
+    linear-gradient(rgba(35,39,43,0), var(--panel) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0,0,0,0.45), rgba(0,0,0,0)) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,0.45), rgba(0,0,0,0)) bottom / 100% 10px no-repeat scroll;
+}
 .outliner { list-style: none; margin: 0; padding: 4px; }
 .outliner li button {
-  width: 100%; display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
+  width: 100%; min-height: var(--ctl); display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
 }
 .outliner li button:hover { background: var(--panel-2); }
 .outliner li button[aria-selected="true"] { background: rgba(242,164,58,0.2); color: #ffd9a3; }
-.outliner svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
-.outliner .kind-source svg, .outliner .kind-block svg, .outliner .kind-rain svg { color: var(--water); }
+.outliner svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.outliner .kind-source svg, .outliner .kind-block svg { color: var(--water); }
 .outliner .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.outliner .off { color: var(--muted); font-size: 11px; }
+.outliner .off { color: var(--muted); font-size: 12px; }
 
-.props { padding: 6px 10px 16px; display: grid; gap: 10px; }
-.props .empty { color: var(--muted); padding: 10px 2px; }
-.pgroup { display: grid; gap: 5px; }
-.pgroup > h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; color: var(--muted); }
-.prow { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 28px; }
-.prow > label, .prow > .lbl { color: var(--muted); font-size: 12px; }
-.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
-.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
-.nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
+.props { padding: 8px 10px 18px; display: grid; gap: 12px; }
+.props .empty { color: var(--muted); padding: 10px 2px; margin: 0; }
+.pgroup { display: grid; gap: 6px; }
+.pgroup > h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.prow { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 8px; min-height: var(--ctl); }
+.prow > .lbl { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
+.prow > .lbl small { display: block; font-size: 11px; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
 .nf {
-  position: relative; height: 26px; border-radius: 5px; background: var(--field); border: 1px solid var(--line-soft);
-  display: flex; align-items: center; cursor: ew-resize; touch-action: none; user-select: none; overflow: hidden; min-width: 0;
+  position: relative; height: var(--ctl); border-radius: 5px; background: var(--field); border: 1px solid var(--line-soft);
+  display: flex; align-items: center; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; overflow: hidden; min-width: 0;
 }
 .nf:hover { border-color: var(--line); }
 .nf:focus-within, .nf.focus { border-color: var(--accent); }
 .nf .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(242,164,58,0.16); pointer-events: none; }
-.nf .ax { position: relative; padding-left: 6px; font: 600 11px var(--font-data); }
-.nf .ax.x { color: #e8625f; } .nf .ax.y { color: #8bd16a; } .nf .ax.z { color: #5c9cf0; }
-.nf .val { position: relative; flex: 1; text-align: right; padding: 0 5px; font: 12px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nf input { position: absolute; inset: 0; width: 100%; border: 0; outline: 0; background: var(--field); color: var(--text); font: 12px var(--font-data); text-align: right; padding: 0 6px; }
-.seg { display: flex; flex-wrap: wrap; gap: 3px; }
+.nf .ax { position: relative; padding-left: 7px; font: 600 12px var(--font-data); }
+.nf .ax.x { color: #ef7471; } .nf .ax.y { color: #93d673; } .nf .ax.z { color: #6fa8f2; }
+.nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
+.nf .val { position: relative; flex: 1; text-align: right; padding: 0 6px; font: 13px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf input { position: absolute; inset: 0; width: 100%; border: 0; outline: 0; background: var(--field); color: var(--text); font: 13px var(--font-data); text-align: right; padding: 0 7px; }
+@media (pointer: coarse) { .nf input { font-size: 16px; } }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .seg button {
-  flex: 1 1 auto; height: 26px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft);
-  background: var(--field); cursor: pointer; white-space: nowrap; font-size: 12px;
+  flex: 1 1 auto; min-height: var(--ctl); padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-soft);
+  background: var(--field); cursor: pointer; white-space: nowrap; font-size: 13px;
 }
 .seg button:hover { border-color: var(--line); }
 .seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
-.swatches button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+@media (pointer: coarse) { .swatches button { width: 34px; height: 34px; } }
 .swatches button[aria-checked="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel); }
-.txt { height: 26px; width: 100%; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); color: var(--text); padding: 0 7px; font: inherit; }
+.txt { height: var(--ctl); width: 100%; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); color: var(--text); padding: 0 8px; font: inherit; }
+@media (pointer: coarse) { .txt { font-size: 16px; } }
 .txt:focus { outline: none; border-color: var(--accent); }
-.toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; background: none; border: 0; padding: 0; height: 26px; }
-.toggle .sw { width: 30px; height: 17px; border-radius: 9px; background: var(--line); position: relative; transition: background 0.15s; }
-.toggle .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.toggle { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; background: none; border: 0; padding: 0; min-height: var(--ctl); }
+.toggle .sw { width: 34px; height: 19px; border-radius: 10px; background: var(--line); position: relative; transition: background 0.15s; flex: none; }
+.toggle .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
 .toggle[aria-checked="true"] .sw { background: var(--water); }
-.toggle[aria-checked="true"] .sw::after { transform: translateX(13px); }
-.note { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.toggle[aria-checked="true"] .sw::after { transform: translateX(15px); }
+.note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 .note b { color: var(--text); font-weight: 500; font-family: var(--font-data); }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+details.more { font-size: 12.5px; color: var(--muted); }
+details.more summary { cursor: pointer; min-height: var(--ctl); display: flex; align-items: center; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn {
-  height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line);
+  min-height: var(--ctl); padding: 0 12px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--panel-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 .btn:hover { border-color: var(--muted); }
+.btn.primary { background: rgba(95,180,230,0.16); border-color: rgba(95,180,230,0.55); }
 .btn.danger { color: #ffb4ae; }
-.btn svg { width: 14px; height: 14px; }
+.btn.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn svg { width: 15px; height: 15px; }
 
 footer.time {
   grid-area: time;
   display: flex; align-items: center; gap: 6px; min-width: 0;
-  padding-inline: max(10px, env(safe-area-inset-left, 0px)) max(10px, env(safe-area-inset-right, 0px));
+  padding-inline: 10px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--panel); border-top: 1px solid var(--line);
-  overflow-x: auto; scrollbar-width: none;
 }
+#btn-reset { margin-right: 6px; }
 .play {
-  height: 32px; min-width: 88px; padding: 0 12px; border-radius: 6px; border: 0;
+  height: 34px; width: 104px; padding: 0 12px; border-radius: 6px; border: 0; flex: none;
   background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .play svg { width: 15px; height: 15px; }
-.speeds { display: flex; gap: 3px; margin-left: 6px; }
-.speeds button { height: 28px; padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font: 12px var(--font-data); white-space: nowrap; }
-.speeds button:first-child { font-family: var(--font-body); }
+.speeds { display: flex; align-items: center; gap: 4px; margin-left: 8px; }
+.speeds .lbl { color: var(--muted); font-size: 12.5px; margin-right: 2px; }
+.speeds button { height: 30px; min-width: 44px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font: 12.5px var(--font-data); white-space: nowrap; }
+.speeds button:first-of-type { font-family: var(--font-body); }
 .speeds button[aria-checked="true"] { background: var(--panel-2); border-color: var(--accent); color: #ffd9a3; }
-.tinfo { margin-left: auto; display: flex; gap: 16px; font: 12px var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
-.tinfo b { color: var(--text); font-weight: 500; }
-.meter { width: 70px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
-.meter i { display: block; height: 100%; width: 0; background: var(--water); }
-.meter.full i { background: var(--danger); }
+.tinfo { margin-left: auto; display: flex; gap: 18px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.tinfo b { color: var(--text); font: 500 13px var(--font-data); font-variant-numeric: tabular-nums; }
+.tinfo .cap { font-size: 12px; }
+.tinfo .cap.full { color: #ffb4ae; }
 
 .toast {
-  position: fixed; left: 50%; top: 52px; transform: translateX(-50%); z-index: 50;
-  padding: 8px 14px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 13px; pointer-events: none;
-  opacity: 0; transition: opacity 0.2s; max-width: calc(100% - 32px); text-align: center;
+  position: fixed; left: 50%; top: 54px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px 8px 14px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45); font-size: 13.5px; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s; max-width: calc(100% - 32px);
 }
 .toast.show { opacity: 1; }
+.toast.show.has-act { pointer-events: auto; }
+.toast .act { min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: #ffd9a3; cursor: pointer; white-space: nowrap; flex: none; }
+.toast .act[hidden] { display: none; }
+.welcome {
+  position: absolute; inset: 0; z-index: 15; display: grid; place-items: center; padding: 16px;
+  background: rgba(10,12,14,0.55);
+}
+.welcome[hidden] { display: none; }
+.welcome .card {
+  max-width: 460px; max-height: 100%; overflow-y: auto; padding: 18px 20px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+  display: grid; gap: 10px;
+}
+.welcome h2 { margin: 0; font-size: 17px; }
+.welcome p { margin: 0; color: var(--muted); }
+.welcome ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.welcome li b { color: #ffd9a3; font-weight: 600; }
+.welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .fatal {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -246,29 +303,65 @@ footer.time {
 
 .drawer-btn { display: none; }
 @media (max-width: 820px) {
+  body { font-size: 14px; }
   .app {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 42px 44px minmax(0, 1fr) auto;
-    grid-template-areas: "head" "tools" "view" "time";
+    grid-template-rows: 46px 58px minmax(0, 1fr) auto 56px;
+    grid-template-areas: "head" "tools" "view" "side" "time";
   }
-  nav.tools { flex-direction: row; justify-content: center; padding: 4px 8px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
-  nav.tools .sep { width: 1px; height: 24px; margin: 0 4px; }
+  header.head { padding-inline: 8px; gap: 2px; }
+  .brand { margin-right: 4px; font-size: 13px; letter-spacing: 0.04em; }
+  .wide-only { display: none !important; }
+  .narrow-only { display: flex !important; }
+  .mbtn { padding: 0 8px; }
+  nav.tools { flex-direction: row; justify-content: center; gap: 2px; padding: 3px 6px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 10.5px; white-space: nowrap; }
+  nav.tools .sep { width: 1px; height: 30px; margin: 0 3px; }
   aside.side {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: 62%;
-    border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(0,0,0,0.45);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: min(46vh, 400px, calc(100vh - 380px));
+    height: min(46dvh, 400px, calc(100dvh - 380px));
+    grid-template-rows: auto minmax(0, 1fr);
+    border-left: 0; border-top: 1px solid var(--line);
     padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
   }
+  aside.side.tall { height: min(72vh, 640px, calc(100vh - 250px)); height: min(72dvh, 640px, calc(100dvh - 250px)); }
+  .prow > .lbl { font-size: 13.5px; }
+  .pgroup > h3 { font-size: 13px; }
+  .note, details.more { font-size: 13px; }
+  .nf .val, .nf input { font-size: 14px; }
+  .seg button { font-size: 14px; }
   aside.side:not(.open) { display: none; }
+  .sheet-head { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); }
+  .sheet-head .tabs { display: flex; gap: 4px; flex: 1; }
+  .sheet-head .tabs button { min-height: 40px; padding: 0 14px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .sheet-head .tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text); font-weight: 600; }
+  aside.side[data-tab="props"] .sec-list, aside.side[data-tab="list"] .sec-props { display: none; }
+  aside.side { grid-template-rows: auto minmax(0, 1fr) !important; }
+  .split { display: none; }
+  .sec-list .sec-head { display: none; }
   .drawer-btn { display: inline-flex; }
-  .brand { margin-right: 4px; }
-  .mbtn .lbl-wide { display: none; }
-  footer.time { flex-wrap: wrap; row-gap: 4px; padding-block: 6px; }
-  .tinfo { margin-left: 0; width: 100%; justify-content: space-between; gap: 8px; }
+  .drawer-btn[aria-expanded="true"] { background: var(--panel-2); }
+  footer.time { gap: 4px; padding-inline: 8px; }
+  #btn-reset { margin-right: 4px; }
+  .play { width: 92px; height: 40px; }
+  .speeds { margin-left: auto; gap: 3px; }
+  .speeds .lbl { display: none; }
+  .speeds button { height: 40px; min-width: 42px; padding: 0 6px; }
+  .tinfo { display: none; }
+  .view-info {
+    display: flex; gap: 10px; position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 6px;
+    background: rgba(16,19,22,0.78); font-size: 12.5px; color: var(--muted); pointer-events: none;
+  }
+  .view-info b { color: var(--text); font: 500 12.5px var(--font-data); }
+  .view-status { top: 40px; left: 8px; max-width: calc(100% - 110px); }
   .view-hint { display: none; }
-  .navball { width: 64px; height: 64px; }
+  .navball { width: 70px; height: 70px; }
+  .navbtns button { width: 40px; height: 40px; }
+  .toast { top: 110px; }
 }
-@media (min-width: 821px) { #btn-side-close { display: none; } }
+@media (max-width: 380px) {
+  .brand { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { .toast, .toggle .sw, .toggle .sw::after { transition: none; } }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
@@ -278,87 +371,122 @@ footer.time {
   <header class="head">
     <div class="brand">水理<b>ラボ</b></div>
     <div class="menu">
-      <button class="mbtn" id="m-add" aria-haspopup="true" aria-expanded="false" title="追加（Shift+A）">
+      <button class="mbtn" id="m-file" aria-haspopup="true" aria-expanded="false" title="新規・開く・保存・サンプル">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3.5 1.8h6l3 3v9.4h-9z"/><path d="M9.5 1.8v3h3"/></svg>ファイル
+      </button>
+      <div class="dropdown" id="dd-file" hidden></div>
+    </div>
+    <div class="menu">
+      <button class="mbtn" id="m-add" aria-haspopup="true" aria-expanded="false" title="物や水源を追加（Shift+A）">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>追加
       </button>
       <div class="dropdown" id="dd-add" hidden></div>
     </div>
     <div class="menu">
-      <button class="mbtn" id="m-sample" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M2.5 6.5h11M6.5 6.5v7"/></svg><span class="lbl-wide">サンプル</span>
-      </button>
-      <div class="dropdown" id="dd-sample" hidden></div>
-    </div>
-    <div class="menu">
-      <button class="mbtn" id="m-view" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg><span class="lbl-wide">表示</span>
+      <button class="mbtn" id="m-view" aria-haspopup="true" aria-expanded="false" title="見え方と視点">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>表示
       </button>
       <div class="dropdown" id="dd-view" hidden></div>
     </div>
     <div class="spacer"></div>
-    <button class="ibtn" id="btn-undo" title="元に戻す（Ctrl+Z）" aria-label="元に戻す" disabled>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>
+    <button class="mbtn wide-only" data-undo title="元に戻す（Ctrl+Z）" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>元に戻す
     </button>
-    <button class="ibtn" id="btn-redo" title="やり直す（Ctrl+Shift+Z）" aria-label="やり直す" disabled>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>
+    <button class="mbtn wide-only" data-redo title="やり直す（Ctrl+Shift+Z）" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>やり直す
     </button>
     <button class="mbtn drawer-btn" id="btn-side" aria-controls="side" aria-expanded="false">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>シーン
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>設定
     </button>
   </header>
 
-  <nav class="tools" role="radiogroup" aria-label="編集ツール">
-    <button class="tbtn" role="radio" data-tool="move" aria-checked="true" title="移動（G）" aria-label="移動">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15M2.5 10h15M10 2.5l-2.2 2.2M10 2.5l2.2 2.2M10 17.5l-2.2-2.2M10 17.5l2.2-2.2M2.5 10l2.2-2.2M2.5 10l2.2 2.2M17.5 10l-2.2-2.2M17.5 10l-2.2 2.2"/></svg>
-    </button>
-    <button class="tbtn" role="radio" data-tool="rotate" aria-checked="false" title="回転（R）" aria-label="回転">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M14.5 2.5v3.3h-3.3"/></svg>
-    </button>
-    <button class="tbtn" role="radio" data-tool="scale" aria-checked="false" title="寸法（S）" aria-label="寸法">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="8" height="8" rx="1"/><path d="M10 3h7v7M17 3l-6.5 6.5"/></svg>
-    </button>
+  <nav class="tools" aria-label="編集">
+    <div role="radiogroup" aria-label="編集ツール" style="display: contents">
+      <button class="tbtn" role="radio" data-tool="move" aria-checked="true" title="移動（G）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15M2.5 10h15M10 2.5l-2.2 2.2M10 2.5l2.2 2.2M10 17.5l-2.2-2.2M10 17.5l2.2-2.2M2.5 10l2.2-2.2M2.5 10l2.2 2.2M17.5 10l-2.2-2.2M17.5 10l-2.2 2.2"/></svg>移動
+      </button>
+      <button class="tbtn" role="radio" data-tool="rotate" aria-checked="false" title="回転・向き（R）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M14.5 2.5v3.3h-3.3"/></svg>回転
+      </button>
+      <button class="tbtn" role="radio" data-tool="scale" aria-checked="false" title="大きさ（S）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="8" height="8" rx="1"/><path d="M10 3h7v7M17 3l-6.5 6.5"/></svg>大きさ
+      </button>
+    </div>
     <span class="sep" aria-hidden="true"></span>
-    <button class="tbtn" id="btn-dup" title="複製（Shift+D）" aria-label="複製">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>
+    <button class="tbtn" id="btn-dup" title="複製（Shift+D）">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>複製
     </button>
-    <button class="tbtn" id="btn-del" title="削除（X / Delete）" aria-label="削除">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11"/></svg>
+    <button class="tbtn" id="btn-del" title="削除（X / Delete）">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11"/></svg>削除
+    </button>
+    <span class="sep narrow-only" aria-hidden="true"></span>
+    <button class="tbtn narrow-only" data-undo aria-label="元に戻す" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>戻す
+    </button>
+    <button class="tbtn narrow-only" data-redo aria-label="やり直す" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>やり直す
     </button>
   </nav>
 
   <main class="view" id="view">
     <canvas id="gpu" tabindex="0" aria-label="3Dビュー"></canvas>
     <canvas id="overlay" aria-hidden="true"></canvas>
-    <div class="view-status" id="status"></div>
+    <div class="view-info" aria-hidden="true"><span>時間 <b data-info="time">0.00 s</b></span><span>水 <b data-info="water">0.00 L</b></span></div>
+    <div class="view-status" id="status" hidden></div>
     <div class="navpad">
-      <div class="navball" id="navball" title="ドラッグで視点を回転・軸をクリックでその方向から見る" role="img" aria-label="視点の回転"></div>
+      <div class="navball" id="navball" title="ドラッグで視点を回す・X / Y / Z の丸を押すとその方向から見る" role="img" aria-label="視点の向き"></div>
       <div class="navbtns">
-        <button id="nav-zoom" title="上下にドラッグで拡大縮小" aria-label="拡大縮小">
-          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="4.5"/><path d="M11 11l4.5 4.5M5.5 7.5h4M7.5 5.5v4"/></svg>
+        <button id="nav-in" title="近づく" aria-label="近づく">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 4v10M4 9h10"/></svg>
         </button>
-        <button id="nav-pan" title="ドラッグで視点を平行移動" aria-label="平行移動">
-          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5V4.2a1.1 1.1 0 0 1 2.2 0V8M8.2 7.5V3.2a1.1 1.1 0 0 1 2.2 0V8M10.4 7.8V4.4a1.1 1.1 0 0 1 2.2 0V9.5M12.6 8.2a1.1 1.1 0 0 1 2.2 0v2.6a5 5 0 0 1-5 5H9a4.2 4.2 0 0 1-3.5-1.9L3.4 11a1.2 1.2 0 0 1 1.9-1.5L6 10.5"/></svg>
+        <button id="nav-out" title="遠ざかる" aria-label="遠ざかる">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 9h10"/></svg>
+        </button>
+        <button id="nav-pan" title="押すと、ドラッグで視点を平行移動するようになります" aria-label="平行移動" aria-pressed="false">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v14M2 9h14M9 2L7 4M9 2l2 2M9 16l-2-2M9 16l2-2M2 9l2-2M2 9l2 2M16 9l-2-2M16 9l-2 2"/></svg>
+        </button>
+        <button id="nav-home" title="全体を表示" aria-label="全体を表示">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 8.5L9 3l6 5.5"/><path d="M4.8 7.2v7.3h8.4V7.2"/></svg>
         </button>
       </div>
     </div>
     <div class="view-hint" id="hint"></div>
+    <div class="welcome" id="welcome" hidden>
+      <div class="card" role="dialog" aria-modal="false" aria-labelledby="welcome-title">
+        <h2 id="welcome-title">水理ラボ</h2>
+        <p>水槽に物と水源を置いて、水の流れ方を試せます。</p>
+        <ol id="welcome-steps"></ol>
+        <button class="btn" id="welcome-ok" type="button">はじめる</button>
+      </div>
+    </div>
   </main>
 
-  <aside class="side" id="side" aria-label="シーンとプロパティ">
-    <section class="side-sec">
-      <div class="sec-head"><span>シーン</span>
-        <button class="ibtn" id="btn-side-close" aria-label="閉じる"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+  <aside class="side" id="side" aria-label="シーンと設定" data-tab="props">
+    <div class="sheet-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="props" aria-selected="true">設定</button>
+        <button role="tab" data-tab="list" aria-selected="false">一覧</button>
       </div>
-      <div class="scroll"><ul class="outliner" id="outliner" role="listbox" aria-label="シーンの項目"></ul></div>
+      <button class="ibtn" id="btn-side-size" aria-label="広げる" title="広げる">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+      </button>
+      <button class="ibtn" id="btn-side-close" aria-label="閉じる" title="閉じる">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <section class="side-sec sec-list">
+      <div class="sec-head"><span class="ttl">シーン</span></div>
+      <div class="scroll" id="outliner-scroll"><ul class="outliner" id="outliner" role="listbox" aria-label="シーンの項目"></ul></div>
     </section>
-    <section class="side-sec">
-      <div class="sec-head"><span id="props-title">プロパティ</span></div>
+    <div class="split" id="split" role="separator" aria-orientation="horizontal" aria-label="一覧と設定の境目" title="ドラッグで一覧の高さを変える"></div>
+    <section class="side-sec sec-props">
+      <div class="sec-head"><span class="ttl" id="props-title">設定</span><span class="acts" id="props-acts"></span></div>
       <div class="scroll"><div class="props" id="props"></div></div>
     </section>
   </aside>
 
   <footer class="time">
-    <button class="ibtn" id="btn-reset" title="最初の状態に戻す（Home）" aria-label="最初の状態に戻す">
+    <button class="ibtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま）" aria-label="水を最初の状態に戻す">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2.5" y="3" width="2" height="10" rx="0.6"/><path d="M13.5 3.4v9.2a.5.5 0 0 1-.8.4L6 8.4a.5.5 0 0 1 0-.8l6.7-4.6a.5.5 0 0 1 .8.4z"/></svg>
     </button>
     <button class="play" id="btn-play" aria-pressed="false" title="再生・一時停止（Space）">
@@ -367,20 +495,20 @@ footer.time {
     <button class="ibtn" id="btn-step" title="コマ送り（→）" aria-label="コマ送り">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 3.4v9.2a.5.5 0 0 0 .8.4L10 8.4a.5.5 0 0 0 0-.8L3.3 3a.5.5 0 0 0-.8.4z"/><rect x="11.5" y="3" width="2" height="10" rx="0.6"/></svg>
     </button>
-    <div class="speeds" role="radiogroup" aria-label="再生速度">
-      <button role="radio" data-speed="1" aria-checked="true">等速</button>
-      <button role="radio" data-speed="0.25" aria-checked="false">1/4</button>
-      <button role="radio" data-speed="0.1" aria-checked="false">1/10</button>
-      <button role="radio" data-speed="0.025" aria-checked="false">1/40</button>
+    <div class="speeds" role="radiogroup" aria-label="再生の速さ">
+      <span class="lbl">速さ</span>
+      <button role="radio" data-speed="1" aria-checked="true" aria-label="ふつうの速さ">1倍</button>
+      <button role="radio" data-speed="0.25" aria-checked="false" aria-label="4分の1の速さ">1/4</button>
+      <button role="radio" data-speed="0.1" aria-checked="false" aria-label="10分の1の速さ">1/10</button>
+      <button role="radio" data-speed="0.025" aria-checked="false" aria-label="40分の1の速さ">1/40</button>
     </div>
     <div class="tinfo">
-      <span>時間 <b id="t-time">0.00 s</b></span>
-      <span>水量 <b id="t-water">0.00 L</b><span class="meter" id="t-meter" title="計算できる水の量の上限に対する割合"><i></i></span></span>
-      <span class="fps">表示 <b id="t-fps">--</b></span>
+      <span>時間 <b data-info="time">0.00 s</b></span>
+      <span>水槽の水 <b data-info="water">0.00 L</b> <span class="cap" data-info="cap"></span></span>
     </div>
   </footer>
 </div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="msg"></span><button class="act" type="button" hidden></button></div>
 <script>
 'use strict';
 (async () => {
@@ -507,13 +635,19 @@ function hexToRgb(hex) {
   return s.map((c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
 }
 
+// a short message at the top of the view; `action` adds a button ({ label, run }) and keeps the message up longer
 let toastTimer = 0;
-function toast(msg, ms = 2600) {
+function toast(msg, ms = 2600, action = null) {
   const t = $('toast');
-  t.textContent = msg;
+  t.querySelector('.msg').textContent = msg;
+  const b = t.querySelector('.act');
+  b.hidden = !action;
+  b.textContent = action ? action.label : '';
+  b.onclick = action ? () => { t.classList.remove('show'); action.run(); } : null;
+  t.classList.toggle('has-act', !!action);
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? Math.max(ms, 5000) : ms);
 }
 function fatal(title, body) {
   const d = document.createElement('div');
@@ -542,10 +676,11 @@ const SHAPES = {
   torus:     { label: 'ドーナツ', type: 4, dims: { R: 0.05, r: 0.014 } },
   cup:       { label: 'コップ',   type: 5, dims: { r: 0.04, h: 0.10, t: 0.006 } },
   container: { label: '容器',     type: 6, dims: { w: 0.14, h: 0.06, d: 0.10, t: 0.008 } },
-  gutter:    { label: '樋',       type: 7, dims: { len: 0.28, r: 0.03, t: 0.006 } },
+  gutter:    { label: '樋（とい）', type: 7, dims: { len: 0.28, r: 0.03, t: 0.006 } },
 };
 const DIM_LABELS = { w: '幅', h: '高さ', d: '奥行き', t: '厚み', r: '半径', R: '輪の半径', len: '長さ' };
 const DIM_LIMITS = { w: [0.01, 1.2], h: [0.005, 1.0], d: [0.01, 1.2], t: [0.004, 0.05], r: [0.004, 0.4], R: [0.01, 0.4], len: [0.04, 1.2] };
+const DRAIN_LIMITS = [0.005, 0.2];
 
 const MATERIALS = {
   ceramic: { label: '陶器', rough: 0.18, metal: 0 },
@@ -564,6 +699,17 @@ const SOURCE_MODES = {
 };
 
 let uid = 1;
+const SHAPE_ICONS = {
+  box: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M9 2.5l6 3.2v6.6L9 15.5l-6-3.2V5.7z"/><path d="M3 5.7L9 9l6-3.3M9 9v6.5"/></svg>',
+  plate: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2 8.5l7-3 7 3-7 3z"/><path d="M2 8.5v1.6l7 3 7-3V8.5M9 11.5v1.6"/></svg>',
+  sphere: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="9" cy="9" r="6.2"/><path d="M2.8 9c1.6 1.6 10.8 1.6 12.4 0" stroke-dasharray="1.6 1.4"/></svg>',
+  cylinder: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="9" cy="4.2" rx="4.2" ry="1.7"/><path d="M4.8 4.2v9.6c0 .9 1.9 1.7 4.2 1.7s4.2-.8 4.2-1.7V4.2"/></svg>',
+  cone: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M9 2.3l5 11.4M9 2.3L4 13.7"/><ellipse cx="9" cy="13.7" rx="5" ry="1.8"/></svg>',
+  torus: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="9" cy="9.5" rx="6.8" ry="3.8"/><ellipse cx="9" cy="9" rx="2.8" ry="1.2"/></svg>',
+  cup: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><ellipse cx="9" cy="3.8" rx="4.6" ry="1.5"/><path d="M4.4 3.8l.9 10.3c.1.9 1.7 1.5 3.7 1.5s3.6-.6 3.7-1.5l.9-10.3"/></svg>',
+  container: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.5 6.5L9 9.3l6.5-2.8M2.5 6.5v5.2L9 14.5l6.5-2.8V6.5M9 9.3v5.2"/><path d="M2.5 6.5L9 3.7l6.5 2.8" stroke-dasharray="1.5 1.3"/></svg>',
+  gutter: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 6.5c0 3.2 2.2 5.2 5 5.2h4c2.8 0 5-2 5-5.2"/><path d="M2 6.5h2.2M13.8 6.5H16M4.2 6.5c0 2 1.3 3.2 3 3.2h3.6c1.7 0 3-1.2 3-3.2"/></svg>',
+};
 const ICONS = {
   obstacle: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 1.8l5.5 3.1v6.2L8 14.2 2.5 11.1V4.9z"/><path d="M2.5 4.9L8 8l5.5-3.1M8 8v6.2"/></svg>',
   source: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 3.5h6.5a2 2 0 0 1 2 2V7"/><path d="M3 2v3"/><path d="M11.5 9.5v1.5M11.5 13v1"/></svg>',
@@ -598,7 +744,7 @@ function makeSource(pos) {
   };
 }
 function makeBlock(pos) {
-  return { id: uid++, kind: 'block', name: '水の塊', pos: pos ? [...pos] : [0, 0.06, 0], dims: { w: 0.16, h: 0.10, d: 0.16 } };
+  return { id: uid++, kind: 'block', name: '水の塊', pos: pos ? [...pos] : [0, 0.05, 0], dims: { w: 0.16, h: 0.10, d: 0.16 } };
 }
 function makeDrain(pos) {
   return { id: uid++, kind: 'drain', name: '排水口', pos: pos ? [...pos] : [0, 0, 0], rot: [0, 0, 0], r: 0.025 };
@@ -616,6 +762,29 @@ function sourceDir(src) {
   const p = src.pitch * DEG, y = src.yaw * DEG;
   return [Math.cos(p) * Math.sin(y), Math.sin(p), Math.cos(p) * Math.cos(y)];
 }
+// diameter of the nozzle drawn for a source (the outlet itself for streams)
+function sourceOutlet(src) {
+  if (src.mode === 'shower') return Math.max(sourceNozzle(src), 0.044);
+  if (src.mode === 'drops') return Math.max(src.dropD / 1000 * 0.7, 0.004);
+  if (src.mode === 'burst') return 0.03;
+  return sourceNozzle(src);
+}
+
+// ---------- axes shown in the editor ----------
+// The editor uses Blender's axes: X to the right, Y away from the front view, Z up. The solver and the renderer work
+// with Y up and +Z towards the front view, so positions and rotations are converted at the panel and the gizmos.
+const UI_FROM_WORLD = [1, 0, 0, 0, 0, -1, 0, 1, 0];
+const WORLD_FROM_UI = [1, 0, 0, 0, 0, 1, 0, -1, 0];
+function toUI(p) { return [p[0], -p[2], p[1]]; }
+function fromUI(u) { return [u[0], u[2], -u[1]]; }
+function uiAxisDir(i) { return fromUI([i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0]); }
+// editor axis (0 X, 1 Y, 2 Z) that an item's own local axis k shows up as (its local y is its height)
+const UI_OF_LOCAL = [0, 2, 1];
+function uiEuler(rot) { return m3.toEuler(m3.mul(m3.mul(UI_FROM_WORLD, m3.euler(rot[0], rot[1], rot[2])), WORLD_FROM_UI)); }
+function worldEuler(ui) { return m3.toEuler(m3.mul(m3.mul(WORLD_FROM_UI, m3.euler(ui[0], ui[1], ui[2])), UI_FROM_WORLD)); }
+// compass heading of a source in the editor: 0° = away from the front view (+Y), 90° = right (+X)
+function sourceHeading(src) { return ((180 - src.yaw) % 360 + 360) % 360; }
+function setSourceHeading(src, h) { src.yaw = ((180 - h) % 360 + 360) % 360; }
 
 // ---------- signed distance (mirrors the WGSL code; used for picking and placement) ----------
 function sdRoundBox(p, b, r) {
@@ -699,6 +868,21 @@ function obstacleBottom(o) {
     }
   }
   return lo === Infinity ? o.pos[1] - r : lo;
+}
+
+// ---------- where items may be placed ----------
+// inside the tank's footprint and not far above the rim; an obstacle may sink into the floor up to its middle
+// (a half-buried stone), a water block and a source stay above it
+function posLimits(it) {
+  const t = scene.tank;
+  let lo = 0;
+  if (it.kind === 'block') lo = it.dims.h / 2;
+  else if (it.kind === 'source') lo = 0.01;
+  return [[-t.w / 2, t.w / 2], [lo, t.h + 0.4], [-t.d / 2, t.d / 2]];
+}
+function clampItemPos(it, p) {
+  const L = posLimits(it);
+  return p.map((x, i) => clamp(x, L[i][0], Math.max(L[i][0], L[i][1])));
 }
 
 // ---------- scene ----------
@@ -1519,14 +1703,16 @@ fn splashCrown(x: vec3f, U: f32, m: f32, id: u32) {
   // cells it enters are dominated by the liquid's own particles, so FLIP would carry it straight through the pool.
   // It merges with the liquid instead. The momentum it brings becomes a pressure impulse on the surface (ripple layer)
   // and a crown splash, and from then on it moves with the liquid around it.
-  // vel.w marks a particle that has been flying free (alone in its neighbourhood) since it last belonged to liquid.
+  // vel.w marks a particle that has been flying free since it last belonged to liquid: alone in its neighbourhood with
+  // nothing following it from above. Particles inside a falling stream never get the mark, so a stream pours into
+  // the pool through the grid while its leading drop and the drops it breaks into still splash.
+  // Drops and rain are emitted with the mark; above the grid nothing can be checked, so the mark is kept as it is.
   let c0 = vec3i(g);
   var airborne = p.vel.w;
-  if (!ing) { airborne = 1.0; }
-  else {
+  if (ing) {
     let n0 = countAt(c0);
     if (n0 >= 4u) { airborne = 0.0; }
-    else if (n0 <= 2u) {
+    else if (n0 <= 2u && c0.y + 2 < NY() && countAt(c0 + vec3i(0, 1, 0)) == 0u && countAt(c0 + vec3i(0, 2, 0)) == 0u) {
       var around = 0u;
       for (var dz = -1; dz <= 1; dz++) {
         for (var dy = -1; dy <= 1; dy++) {
@@ -1585,6 +1771,7 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
 @group(0) @binding(2) var<storage, read_write> C: Counters;
 @group(0) @binding(3) var<storage, read> E: array<Emit>;
 @group(0) @binding(4) var<uniform> EI: vec4u;
+@group(0) @binding(6) var<storage, read> cellCount: array<u32>;
 ` + WGSL_SDF(5) + /* wgsl */`
 @compute @workgroup_size(256) fn main(@builtin(global_invocation_id) gid: vec3u) {
   let t = gid.x;
@@ -1598,6 +1785,7 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
   var s = hashU(t * 747796405u + em.info.z * 2891336453u + 1u);
   var pos = vec3f(0.0);
   var vel = vec3f(0.0);
+  var mark = 0.0;
   let shape = em.info.w;
   if (shape == 0u) {
     let rr = em.a.w * sqrt(rnd(&s));
@@ -1617,19 +1805,27 @@ struct Emit { a: vec4f, b: vec4f, c: vec4f, d: vec4f, info: vec4u };
     dd = normalize(dd + vec3f(1e-4));
     pos = em.a.xyz + dd * em.a.w * pow(rnd(&s), 0.3333);
     vel = em.b.xyz;
+    mark = em.b.w;
   } else if (shape == 2u) {
     let nx = u32(em.b.x); let ny = u32(em.b.y);
     let i = local % nx; let j = (local / nx) % ny; let k = local / (nx * ny);
     let jit = (vec3f(rnd(&s), rnd(&s), rnd(&s)) - vec3f(0.5)) * 0.3;
     pos = em.a.xyz + (vec3f(f32(i), f32(j), f32(k)) + vec3f(0.5) + jit) * em.a.w;
     vel = em.c.xyz;
+    // pouring into the running simulation: leave cells that are already at least half full of water alone
+    let g = gridPos(pos);
+    if (em.b.w > 0.5 && inGrid(g)) {
+      let c = vec3i(g);
+      if (f32(cellCount[cellIdx(c.x, c.y, c.z)]) >= 0.5 * P.phys2.x) { parts[idx] = Particle(vec4f(pos, 0.0), vec4f(0.0)); return; }
+    }
   } else {
     pos = em.a.xyz + vec3f((rnd(&s) * 2.0 - 1.0) * em.a.w, -rnd(&s) * em.d.w, (rnd(&s) * 2.0 - 1.0) * em.a.w);
     vel = em.b.xyz;
+    mark = 1.0;
   }
   var alive = 1.0;
   if (sceneSdf(pos) < 0.0) { alive = 0.0; }
-  parts[idx] = Particle(vec4f(pos, alive), vec4f(vel, 0.0));
+  parts[idx] = Particle(vec4f(pos, alive), vec4f(vel, mark));
 }`;
 
 const WGSL_COMPACT = WGSL_SIM_COMMON + WGSL_COUNTERS + /* wgsl */`
@@ -1885,7 +2081,7 @@ class FluidSim {
       pressure: [0, 1].map((p) => bindGroup(PIPES.pressure, { 0: Pb, 1: this.frac, 2: this.cellType, 3: this.divg, 4: this.pres, 5: this.parity[p] })),
       project: bindGroup(PIPES.project, { 0: Pb, 1: this.vel, 2: this.frac, 3: this.svel, 4: this.cellType, 5: this.pres }),
       g2p: [0, 1].map((c) => [0, 1].map((w) => bindGroup(PIPES.g2p, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.vel, 4: this.velOld, 5: this.objs, 6: this.cellCount, 7: this.ww[w], 8: this.ripple.src }))),
-      emit: [0, 1].map((c) => bindGroup(PIPES.emit, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.emits, 4: this.emitU, 5: this.objs })),
+      emit: [0, 1].map((c) => bindGroup(PIPES.emit, { 0: Pb, 1: this.parts[c], 2: this.counters, 3: this.emits, 4: this.emitU, 5: this.objs, 6: this.cellCount })),
       compact: [0, 1].map((c) => bindGroup(PIPES.compact, { 0: Pb, 1: this.parts[c], 2: this.parts[1 - c], 3: this.counters })),
       count: this.countU.map((u) => bindGroup(PIPES.count, { 0: Pb, 1: this.counters, 2: this.args, 3: u })),
       ww: [0, 1].map((w) => bindGroup(PIPES.ww, { 0: Pb, 1: this.ww[w], 2: this.ww[1 - w], 3: this.counters, 4: this.vel, 5: this.cellCount, 6: this.objs, 7: this.wwU, 8: this.ripple.src })),
@@ -1993,6 +2189,26 @@ class FluidSim {
       this.count += off;
     }
     return off;
+  }
+
+  // emissions outside the time stepping (water blocks at a reset, or poured in while running)
+  emitNow(list, fill) {
+    for (let i = 0; i < list.length; i += MAX_EMIT) {
+      const total = this.writeEmits(list.slice(i, i + MAX_EMIT));
+      if (!total) continue;
+      const enc = device.createCommandEncoder();
+      if (fill) {
+        // fresh per-cell particle counts, so that the pour only fills cells without water
+        this.encodeCount(enc, 0);
+        enc.clearBuffer(this.acc);
+        enc.clearBuffer(this.cellCount);
+        const pass = enc.beginComputePass();
+        pass.setPipeline(PIPES.p2g); pass.setBindGroup(0, this.bg.p2g[this.cur]); pass.dispatchWorkgroupsIndirect(this.args, 0);
+        pass.end();
+      }
+      this.encodeEmit(enc, total);
+      device.queue.submit([enc.finish()]);
+    }
   }
 
   encodeEmit(enc, total) {
@@ -2152,7 +2368,8 @@ function sourceEmits(sim, dt, t) {
       const n = Math.max(1, Math.round(V / Vp));
       const R = Math.max(d / 2, Math.cbrt((3 * n * Vp) / (4 * Math.PI)) * 0.9);
       const p = v3.add(src.pos, v3.mul(dir, R + 0.002));
-      add({ shape: 1, a: [...p, n === 1 ? 0 : R], b: [...v3.mul(dir, src.speed), 0], count: n }, n * Vp * 1000);
+      // drops smaller than a few cells are marked as free-flying so that they splash where they land
+      add({ shape: 1, a: [...p, n === 1 ? 0 : R], b: [...v3.mul(dir, src.speed), n <= 8 ? 1 : 0], count: n }, n * Vp * 1000);
     } else if (src.mode === 'burst') {
       if (st.fired) {
         if (!(src.burstEvery > 0)) continue;
@@ -2161,11 +2378,8 @@ function sourceEmits(sim, dt, t) {
       }
       st.fired = true;
       st.timer = src.burstEvery > 0 ? src.burstEvery : 0;
-      const V = clamp(src.burst, 0.01, 50) / 1000;
-      const n = Math.max(1, Math.round(V / Vp));
-      const R = Math.cbrt((3 * V) / (4 * Math.PI));
-      const p = v3.add(src.pos, v3.mul(dir, R + 0.004));
-      add({ shape: 1, a: [...p, R], b: [...v3.mul(dir, src.speed), 0], count: n }, n * Vp * 1000);
+      const e = burstEmit(sim, src);
+      add(e, e.count * Vp * 1000);
     } else if (src.mode === 'rain') {
       const side = clamp(src.rainSize, 0.05, 2);
       const flux = (clamp(src.rainRate, 1, 500) / 3.6e6) * side * side;
@@ -2179,11 +2393,22 @@ function sourceEmits(sim, dt, t) {
   return list;
 }
 
-// lattice fills for the water blocks (used when the simulation is reset)
-function blockEmits(sim) {
+// one release of a "burst" source: a ball of water in front of the outlet
+function burstEmit(sim, src) {
+  const dir = sourceDir(src);
+  const V = clamp(src.burst, 0.01, 50) / 1000;
+  const n = Math.max(1, Math.round(V / sim.vp));
+  const R = Math.cbrt((3 * V) / (4 * Math.PI));
+  const p = v3.add(src.pos, v3.mul(dir, R + 0.004));
+  return { shape: 1, a: [...p, R], b: [...v3.mul(dir, src.speed), 0], count: n };
+}
+
+// lattice fills for water blocks: all of them when the simulation is reset, or one block poured into the running
+// simulation (`fill`: lattice points in cells that already hold water are skipped)
+function blockEmits(sim, items = scene.items, fill = false) {
   const list = [];
   const sp = sim.h / 2;
-  for (const b of scene.items) {
+  for (const b of items) {
     if (b.kind !== 'block') continue;
     const lo = [b.pos[0] - b.dims.w / 2, b.pos[1] - b.dims.h / 2, b.pos[2] - b.dims.d / 2];
     const hi = [b.pos[0] + b.dims.w / 2, b.pos[1] + b.dims.h / 2, b.pos[2] + b.dims.d / 2];
@@ -2200,9 +2425,16 @@ function blockEmits(sim) {
     if (total <= 0) continue;
     // centre the lattice inside the clipped box
     const start = [0, 1, 2].map((k) => lo[k] + ((hi[k] - lo[k]) - n[k] * sp) / 2);
-    list.push({ shape: 2, a: [...start, sp], b: [n[0], n[1], n[2], 0], c: [0, 0, 0, 0], count: total });
+    list.push({ shape: 2, a: [...start, sp], b: [n[0], n[1], n[2], fill ? 1 : 0], c: [0, 0, 0, 0], count: total });
   }
   return list;
+}
+
+// volume of a block that lies inside the tank [L]
+function blockLiters(b) {
+  const t = scene.tank;
+  const ext = (c, half, lo, hi) => Math.max(0, Math.min(c + half, hi) - Math.max(c - half, lo));
+  return ext(b.pos[0], b.dims.w / 2, -t.w / 2, t.w / 2) * ext(b.pos[1], b.dims.h / 2, 0, t.h) * ext(b.pos[2], b.dims.d / 2, -t.d / 2, t.d / 2) * 1000;
 }
 
 // ---- 61-wgsl-render.js
@@ -3621,7 +3853,7 @@ function buildDraws() {
       push(mesh, obstacleRot(it), it.pos, hexToRgb(it.color), [m.rough, m.metal, it.material === 'stone' ? 1 : 0, 0], true, it);
     } else if (it.kind === 'source') {
       if (it.mode === 'rain') continue;
-      const d = it.mode === 'shower' ? Math.max(sourceNozzle(it), 0.044) : it.mode === 'drops' ? Math.max(it.dropD / 1000 * 0.7, 0.004) : it.mode === 'burst' ? 0.03 : sourceNozzle(it);
+      const d = sourceOutlet(it);
       const key = `n:${d.toFixed(4)}`;
       const mesh = cachedMesh(key, () => meshNozzle(d));
       push(mesh, rotFromDown(sourceDir(it)), it.pos, [0.82, 0.83, 0.85], [0.22, 1, 0, 0], true, it);
@@ -3839,9 +4071,8 @@ function presentShow() {
 const overlay = $('overlay');
 const octx = overlay.getContext('2d');
 let cssW = 1, cssH = 1;
-const AXIS_COLORS = ['#e8625f', '#8bd16a', '#5c9cf0'];
-const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-const editor = { tool: 'move', hover: null, drag: null, modal: null, pointers: new Map(), pinch: null };
+const AXIS_COLORS = ['#ef7471', '#93d673', '#6fa8f2'];
+const editor = { tool: 'move', hover: null, drag: null, modal: null, pointers: new Map(), pinch: null, panMode: false, touch: false, readout: null };
 
 function project(p) {
   const c = m4.transform(view.VP, p);
@@ -3862,6 +4093,8 @@ function worldPerPx(p) {
   const depth = Math.max(v3.dot(v3.sub(p, view.eye), view.fwd), cam.near);
   return depth * 2 * Math.tan(cam.fov / 2) / cssH;
 }
+// pixel tolerances: fingers cover far more than a mouse pointer
+function tolPx() { return editor.touch ? 22 : 9; }
 function raySphere(ray, c, r) {
   const oc = v3.sub(ray.o, c);
   const b = v3.dot(oc, ray.d), q = v3.dot(oc, oc) - r * r, h = b * b - q;
@@ -3875,6 +4108,17 @@ function rayPlane(ray, p0, n) {
   const t = v3.dot(v3.sub(p0, ray.o), n) / den;
   return t > 0 ? v3.add(ray.o, v3.mul(ray.d, t)) : null;
 }
+function rayBox(ray, lo, hi) {
+  let t0 = 0, t1 = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const inv = 1 / (ray.d[i] || 1e-12);
+    let a = (lo[i] - ray.o[i]) * inv, b = (hi[i] - ray.o[i]) * inv;
+    if (a > b) [a, b] = [b, a];
+    t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+    if (t0 > t1) return Infinity;
+  }
+  return t0;
+}
 // parameter s of the point on line (p0 + s * axis) closest to the ray
 function rayLineParam(ray, p0, axis) {
   const w0 = v3.sub(p0, ray.o);
@@ -3883,6 +4127,17 @@ function rayLineParam(ray, p0, axis) {
   if (Math.abs(den) < 1e-8) return null;
   return (b * e - c * d) / den;
 }
+// closest approach between the ray and the segment a-b: { dist, t (along the ray) }
+function raySegment(ray, a, b) {
+  const u = v3.sub(b, a), len = v3.len(u);
+  if (len < 1e-9) { const t = Math.max(v3.dot(v3.sub(a, ray.o), ray.d), 0); return { dist: v3.len(v3.sub(v3.add(ray.o, v3.mul(ray.d, t)), a)), t }; }
+  const ax = v3.mul(u, 1 / len);
+  let s = rayLineParam(ray, a, ax);
+  s = clamp(s === null ? 0 : s, 0, len);
+  const p = v3.add(a, v3.mul(ax, s));
+  const t = Math.max(v3.dot(v3.sub(p, ray.o), ray.d), 0);
+  return { dist: v3.len(v3.sub(v3.add(ray.o, v3.mul(ray.d, t)), p)), t };
+}
 function segDist(px, py, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y;
   const t = clamp(((px - a.x) * vx + (py - a.y) * vy) / (vx * vx + vy * vy || 1), 0, 1);
@@ -3890,49 +4145,117 @@ function segDist(px, py, a, b) {
 }
 
 // ---------- picking ----------
+// Every candidate gets a screen distance in pixels (0 = the pointer is on it) and a depth. Direct hits win by depth;
+// near misses within the touch/mouse tolerance count when nothing is hit directly.
 function rayObstacle(ray, o) {
   const R = obstacleRot(o);
-  const ts = raySphere(ray, o.pos, boundRadius(o) + 0.003);
-  if (!ts || ts[1] < 0) return Infinity;
-  let t = Math.max(ts[0], 0);
-  for (let i = 0; i < 160 && t < ts[1]; i++) {
-    const d = obstacleSdf(o, v3.add(ray.o, v3.mul(ray.d, t)), R);
-    if (d < 0.0004) return t;
+  const ts = raySphere(ray, o.pos, boundRadius(o) + 0.01);
+  if (!ts || ts[1] < 0) return null;
+  let t = Math.max(ts[0], 0), bestPx = Infinity, bestT = t;
+  for (let i = 0; i < 200 && t < ts[1]; i++) {
+    const p = v3.add(ray.o, v3.mul(ray.d, t));
+    const d = obstacleSdf(o, p, R);
+    if (d < 0.0004) return { px: 0, t };
+    const px = d / worldPerPx(p);
+    if (px < bestPx) { bestPx = px; bestT = t; }
     t += Math.max(d * 0.9, 0.0003);
   }
-  return Infinity;
+  return { px: bestPx, t: bestT };
 }
-function blockEdges(b) {
+function sourceBody(it) {
+  const dir = sourceDir(it);
+  return { a: it.pos, b: v3.sub(it.pos, v3.mul(dir, 0.045)), r: sourceOutlet(it) / 2 + 0.003 };
+}
+function blockBounds(b) {
   const h = [b.dims.w / 2, b.dims.h / 2, b.dims.d / 2];
+  return [b.pos.map((x, i) => x - h[i]), b.pos.map((x, i) => x + h[i])];
+}
+function boxEdges(lo, hi) {
   const c = [];
-  for (let i = 0; i < 8; i++) c.push([b.pos[0] + (i & 1 ? h[0] : -h[0]), b.pos[1] + (i & 2 ? h[1] : -h[1]), b.pos[2] + (i & 4 ? h[2] : -h[2])]);
+  for (let i = 0; i < 8; i++) c.push([i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]);
   return [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]].map(([a, b2]) => [c[a], c[b2]]);
+}
+function blockEdges(b) { const [lo, hi] = blockBounds(b); return boxEdges(lo, hi); }
+function tankEdges() { const t = scene.tank; return boxEdges([-t.w / 2, 0, -t.d / 2], [t.w / 2, t.h, t.d / 2]); }
+function edgesPx(cx, cy, edges) {
+  let best = Infinity;
+  for (const [a, b] of edges) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) best = Math.min(best, segDist(cx, cy, pa, pb)); }
+  return best;
 }
 function pickItem(cx, cy) {
   const ray = rayAt(cx, cy);
-  let best = null, bt = Infinity;
+  const tol = tolPx();
+  let hit = null, near = null;
+  const consider = (it, px, t) => {
+    if (px <= 0) { if (!hit || t < hit.t) hit = { it, t }; }
+    else if (px < tol && (!near || px < near.px)) near = { it, px };
+  };
   for (const it of scene.items) {
-    let t = Infinity;
-    if (it.kind === 'obstacle') t = rayObstacle(ray, it);
-    else if (it.kind === 'source') {
-      const s = raySphere(ray, it.pos, it.mode === 'rain' ? 0.02 : 0.02);
-      if (s && s[1] > 0) t = Math.max(s[0], 0);
+    if (it.kind === 'obstacle') {
+      const r = rayObstacle(ray, it);
+      if (r) consider(it, r.px, r.t);
+    } else if (it.kind === 'source') {
+      if (it.mode === 'rain') {
+        const s = it.rainSize / 2;
+        const cs = [[-s, -s], [s, -s], [s, s], [-s, s]].map(([x, z]) => [it.pos[0] + x, it.pos[1], it.pos[2] + z]);
+        const px = Math.min(edgesPx(cx, cy, cs.map((c, i) => [c, cs[(i + 1) % 4]])), Math.hypot(cx - project(it.pos).x, cy - project(it.pos).y));
+        consider(it, px > 4 ? px : 0, v3.len(v3.sub(it.pos, ray.o)));
+      } else {
+        const b = sourceBody(it);
+        const r = raySegment(ray, b.a, b.b);
+        const p = v3.add(ray.o, v3.mul(ray.d, r.t));
+        consider(it, Math.max(0, (r.dist - b.r) / worldPerPx(p)), r.t);
+      }
     } else if (it.kind === 'drain') {
-      const s = raySphere(ray, it.pos, it.r + 0.006);
-      if (s && s[1] > 0) t = Math.max(s[0], 0);
-    }
-    if (t < bt) { bt = t; best = it; }
-  }
-  if (!best && settings.guides) {
-    for (const it of scene.items) {
-      if (it.kind !== 'block') continue;
-      for (const [a, b] of blockEdges(it)) {
-        const pa = project(a), pb = project(b);
-        if (pa.ok && pb.ok && segDist(cx, cy, pa, pb) < 6) return it;
+      const R = m3.euler(it.rot[0], it.rot[1], it.rot[2]);
+      const n = [R[1], R[4], R[7]];
+      const p = rayPlane(ray, it.pos, n);
+      if (p) {
+        const d = v3.len(v3.sub(p, it.pos)) - it.r - 0.004;
+        consider(it, Math.max(0, d / worldPerPx(p)), v3.len(v3.sub(p, ray.o)));
       }
     }
   }
-  return best;
+  if (hit) return hit.it;
+  if (near) return near.it;
+  // water blocks: their frame or the space they enclose
+  let blk = null, bt = Infinity;
+  for (const it of scene.items) {
+    if (it.kind !== 'block') continue;
+    const [lo, hi] = blockBounds(it);
+    let t = rayBox(ray, lo, hi);
+    if (t === Infinity && settings.guides && edgesPx(cx, cy, blockEdges(it)) < tol) t = 0;
+    if (t < bt) { bt = t; blk = it; }
+  }
+  if (blk) return blk;
+  // the tank: its glass, its rim, or the empty space inside it
+  const t = scene.tank;
+  if (rayBox(ray, [-t.w / 2, 0, -t.d / 2], [t.w / 2, t.h, t.d / 2]) < Infinity || edgesPx(cx, cy, tankEdges()) < tol) return 'tank';
+  return null;
+}
+
+// ---------- what each tool can do with each item ----------
+function canRotate(it) {
+  if (!it || it === 'tank') return false;
+  if (it.kind === 'obstacle') return it.shape !== 'sphere';
+  return it.kind === 'drain' || it.kind === 'source';
+}
+function canScale(it) { return !!(it && it !== 'tank' && scaleMap(it)); }
+function toolNote(tool, it) {
+  if (!it) return null;
+  if (tool === 'rotate' && !canRotate(it)) return it.kind === 'block' ? '水の塊は回転できません' : it.kind === 'obstacle' ? '球は回しても形が変わりません' : null;
+  if (tool === 'scale' && !canScale(it)) return it.kind === 'source' ? '水源の太さは「流量」と「勢い」で決まります' : null;
+  return null;
+}
+// rotation axes that change the shape (round shapes ignore their own axis)
+function rotationAxes(it) {
+  if (it.kind === 'drain') return [0, 2];
+  if (it.kind !== 'obstacle') return [];
+  switch (it.shape) {
+    case 'sphere': return [];
+    case 'cylinder': case 'cone': case 'cup': case 'torus': return [0, 2];
+  }
+  return [0, 1, 2];
 }
 
 // ---------- gizmo handles ----------
@@ -3945,36 +4268,37 @@ function gizmoHandles(it) {
   const c = it.pos;
   const pc = project(c);
   if (!pc.ok) return [];
-  const L = 78 * worldPerPx(c);
+  const L = (editor.touch ? 96 : 80) * worldPerPx(c);
+  const knob = editor.touch ? 11 : 7;
   const out = [];
   if (editor.tool === 'move') {
-    AXES.forEach((ax, i) => out.push({ type: 'axis', i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))) }));
-    out.push({ type: 'free', a: pc, r: 9 });
-  } else if (editor.tool === 'rotate') {
+    [0, 1, 2].forEach((i) => { const ax = uiAxisDir(i); out.push({ type: 'axis', i, ci: i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob }); });
+    out.push({ type: 'free', a: pc, r: editor.touch ? 14 : 9 });
+  } else if (editor.tool === 'rotate' && canRotate(it)) {
     if (it.kind === 'source') {
-      out.push({ type: 'aim', a: pc, b: project(v3.add(c, v3.mul(sourceDir(it), L))), L });
-    } else if (it.kind === 'obstacle' || it.kind === 'drain') {
-      AXES.forEach((ax, i) => {
+      out.push({ type: 'aim', a: pc, b: project(v3.add(c, v3.mul(sourceDir(it), L))), L, knob: knob + 1 });
+    } else {
+      const R = itemRot(it);
+      for (const i of rotationAxes(it)) {
+        const ax = [R[i], R[3 + i], R[6 + i]];
         const [u, w] = basisOf(ax);
         const pts = [];
-        for (let k = 0; k <= 48; k++) {
-          const a = (k / 48) * Math.PI * 2;
+        for (let k = 0; k <= 64; k++) {
+          const a = (k / 64) * Math.PI * 2;
           pts.push(project(v3.add(c, v3.add(v3.mul(u, Math.cos(a) * L * 0.8), v3.mul(w, Math.sin(a) * L * 0.8)))));
         }
-        out.push({ type: 'ring', i, axis: ax, pts });
-      });
+        out.push({ type: 'ring', i, ci: UI_OF_LOCAL[i], axis: ax, pts });
+      }
     }
-  } else if (editor.tool === 'scale') {
+  } else if (editor.tool === 'scale' && canScale(it)) {
     const R = itemRot(it);
     const map = scaleMap(it);
-    if (map) {
-      [0, 1, 2].forEach((i) => {
-        if (!map[i].length) return;
-        const ax = [R[i], R[3 + i], R[6 + i]];
-        out.push({ type: 'scale', i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))) });
-      });
-      out.push({ type: 'uscale', a: pc, r: 10 });
-    }
+    [0, 1, 2].forEach((i) => {
+      if (!map[i].length) return;
+      const ax = [R[i], R[3 + i], R[6 + i]];
+      out.push({ type: 'scale', i, ci: UI_OF_LOCAL[i], axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob });
+    });
+    out.push({ type: 'uscale', a: pc, r: editor.touch ? 14 : 10 });
   }
   return out;
 }
@@ -3996,12 +4320,14 @@ function scaleMap(it) {
 function hitHandle(cx, cy) {
   const it = selected();
   if (!it) return null;
-  let best = null, bd = 9;
+  const tol = tolPx();
+  let best = null, bd = tol;
   for (const h of gizmoHandles(it)) {
     let d = Infinity;
-    if (h.type === 'axis' || h.type === 'scale') d = Math.min(segDist(cx, cy, h.a, h.b), Math.hypot(cx - h.b.x, cy - h.b.y) - 4);
-    else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r + 3;
-    else if (h.type === 'aim') d = Math.hypot(cx - h.b.x, cy - h.b.y) - 6;
+    // the inner part of an arrow belongs to the centre handle
+    if (h.type === 'axis' || h.type === 'scale') d = Math.min(segDist(cx, cy, { x: lerp(h.a.x, h.b.x, 0.35), y: lerp(h.a.y, h.b.y, 0.35) }, h.b), Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob);
+    else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r;
+    else if (h.type === 'aim') d = Math.min(Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob, segDist(cx, cy, h.a, h.b) + 2);
     else if (h.type === 'ring') { for (let k = 0; k < h.pts.length - 1; k++) if (h.pts[k].ok && h.pts[k + 1].ok) d = Math.min(d, segDist(cx, cy, h.pts[k], h.pts[k + 1])); }
     if (d < bd) { bd = d; best = h; }
   }
@@ -4014,16 +4340,14 @@ function setDims(it, base, keys, ratio) {
   const target = it.kind === 'drain' ? it : it.dims;
   const src = it.kind === 'drain' ? base : base.dims;
   for (const k of new Set(keys)) {
-    const lim = DIM_LIMITS[k] || [0.004, 2];
+    const lim = it.kind === 'drain' ? DRAIN_LIMITS : DIM_LIMITS[k] || [0.004, 2];
     target[k] = clamp(src[k] * ratio, Math.max(lim[0], DIM_MIN[k] || 0.004), lim[1]);
   }
 }
 function setItemRotation(it, R) {
   if (it.kind === 'obstacle' || it.kind === 'drain') it.rot = m3.toEuler(R).map((x) => Math.round(x * 100) / 100);
 }
-function clampPos(p) {
-  return [clamp(p[0], -3, 3), clamp(p[1], -0.05, 3), clamp(p[2], -3, 3)];
-}
+function setPos(it, p) { it.pos = clampItemPos(it, p); }
 
 function beginGizmoDrag(h, cx, cy) {
   const it = selected();
@@ -4051,12 +4375,12 @@ function updateGizmoDrag(cx, cy, shift) {
   d.moved = d.moved || Math.hypot(cx - d.cx, cy - d.cy) > 2;
   if (h.type === 'axis') {
     const s = rayLineParam(ray, d.start.pos, h.axis);
-    if (s !== null && d.s0 !== null) it.pos = clampPos(v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
+    if (s !== null && d.s0 !== null) setPos(it, v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
   } else if (h.type === 'free') {
     const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
     if (hit && d.hit0) {
       const delta = v3.sub(hit, d.hit0);
-      it.pos = clampPos([d.start.pos[0] + snap(delta[0], shift), d.start.pos[1], d.start.pos[2] + snap(delta[2], shift)]);
+      setPos(it, [d.start.pos[0] + snap(delta[0], shift), d.start.pos[1], d.start.pos[2] + snap(delta[2], shift)]);
     }
   } else if (h.type === 'ring') {
     const hp = rayPlane(ray, d.start.pos, h.axis);
@@ -4070,41 +4394,111 @@ function updateGizmoDrag(cx, cy, shift) {
     let dir;
     if (ts && ts[0] > 0) dir = v3.norm(v3.sub(v3.add(ray.o, v3.mul(ray.d, ts[0])), d.start.pos));
     else { const hp = rayPlane(ray, d.start.pos, view.fwd.map((x) => -x)); if (hp) dir = v3.norm(v3.sub(hp, d.start.pos)); }
-    if (dir) {
-      let pitch = Math.asin(clamp(dir[1], -1, 1)) / DEG, yaw = Math.atan2(dir[0], dir[2]) / DEG;
-      if (shift) { pitch = Math.round(pitch / 15) * 15; yaw = Math.round(yaw / 15) * 15; }
-      it.pitch = Math.round(pitch * 10) / 10; it.yaw = Math.round(((yaw % 360) + 360) % 360 * 10) / 10;
-    }
+    if (dir) setAim(it, dir, shift);
   } else if (h.type === 'scale') {
     const s = rayLineParam(ray, d.start.pos, h.axis);
     if (s !== null && d.s0 && Math.abs(d.s0) > 1e-6) {
       let ratio = Math.max(0.05, s / d.s0);
       if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
       setDims(it, d.start, scaleMap(it)[h.i], ratio);
+      afterScale(it, d.start, ratio, cx, cy);
     }
   } else if (h.type === 'uscale') {
-    const pc = project(d.start.pos);
-    let ratio = Math.max(0.05, Math.hypot(cx - pc.x, cy - pc.y) / d.r0);
-    if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
+    const ratio = dragRatio(d.start.pos, d.r0, cx, cy, shift);
     const map = scaleMap(it);
     setDims(it, d.start, [...map[0], ...map[1], ...map[2]], ratio);
+    afterScale(it, d.start, ratio, cx, cy);
   }
   sceneChanged(false);
 }
+// uniform scaling by dragging: 120 px away from the centre doubles the size, 120 px towards it halves it
+function dragRatio(c, r0, cx, cy, shift) {
+  const pc = project(c);
+  let ratio = Math.pow(2, (Math.hypot(cx - pc.x, cy - pc.y) - r0) / 120);
+  if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
+  return clamp(ratio, 0.05, 20);
+}
+// items standing on the floor keep standing on it while they grow or shrink, and the factor is shown at the pointer
+function afterScale(it, start, ratio, cx, cy) {
+  if (it.kind === 'obstacle') {
+    const b0 = obstacleBottom(start);
+    if (Math.abs(b0) < 0.004) it.pos[1] += b0 - obstacleBottom(it);
+  } else if (it.kind === 'block' && Math.abs(start.pos[1] - start.dims.h / 2) < 0.004) it.pos[1] = it.dims.h / 2 + 0.001;
+  editor.readout = { x: cx, y: cy, text: `×${ratio.toFixed(2)}` };
+}
+// the item's own axis that lies closest to an editor axis (used when S is locked to X, Y or Z)
+function localOfUI(it, ui) {
+  const R = itemRot(it), w = uiAxisDir(ui);
+  let best = 0, bd = -1;
+  for (let k = 0; k < 3; k++) { const d = Math.abs(R[k] * w[0] + R[3 + k] * w[1] + R[6 + k] * w[2]); if (d > bd) { bd = d; best = k; } }
+  return best;
+}
+function setAim(it, dir, shift) {
+  let pitch = Math.asin(clamp(dir[1], -1, 1)) / DEG, yaw = Math.atan2(dir[0], dir[2]) / DEG;
+  if (shift) { pitch = Math.round(pitch / 15) * 15; yaw = Math.round(yaw / 15) * 15; }
+  it.pitch = Math.round(pitch * 10) / 10;
+  it.yaw = Math.round(((yaw % 360) + 360) % 360 * 10) / 10;
+}
 function snap(v, on) { return on ? Math.round(v / 0.01) * 0.01 : v; }
+
+// dragging the selected item itself does what the active tool does
+function beginBodyDrag(it, cx, cy) {
+  const ray = rayAt(cx, cy);
+  const pc = project(it.pos);
+  editor.drag = {
+    kind: 'body', item: it, start: cloneScene(it), x: cx, y: cy, moved: false,
+    hit0: rayPlane(ray, it.pos, [0, 1, 0]), ang0: Math.atan2(cy - pc.y, cx - pc.x), r0: Math.max(Math.hypot(cx - pc.x, cy - pc.y), 12), R0: itemRot(it),
+  };
+}
+function updateBodyDrag(cx, cy, shift) {
+  const d = editor.drag, it = d.item;
+  const ray = rayAt(cx, cy);
+  const pc = project(d.start.pos);
+  if (editor.tool === 'move') {
+    if (shift) {
+      const n = v3.norm([view.fwd[0], 0, view.fwd[2]]);
+      const hit = rayPlane(ray, d.start.pos, n);
+      if (!d.vhit0) d.vhit0 = hit;
+      if (hit && d.vhit0) setPos(it, [d.start.pos[0], d.start.pos[1] + (hit[1] - d.vhit0[1]), d.start.pos[2]]);
+    } else {
+      d.vhit0 = null;
+      const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
+      if (hit && d.hit0) setPos(it, [d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
+    }
+  } else if (editor.tool === 'rotate') {
+    // turn about the vertical axis, following the pointer around the item's centre
+    let da = -(Math.atan2(cy - pc.y, cx - pc.x) - d.ang0) * Math.sign(-view.fwd[1] || 1);
+    if (shift) da = Math.round(da / (15 * DEG)) * 15 * DEG;
+    const Ry = m3.axisAngle([0, 1, 0], da);
+    if (it.kind === 'source') setAim(it, m3.apply(Ry, sourceDir(d.start)), false);
+    else setItemRotation(it, m3.mul(Ry, d.R0));
+  } else if (editor.tool === 'scale') {
+    const ratio = dragRatio(d.start.pos, d.r0, cx, cy, shift);
+    const map = scaleMap(it);
+    setDims(it, d.start, [...map[0], ...map[1], ...map[2]], ratio);
+    afterScale(it, d.start, ratio, cx, cy);
+  }
+  sceneChanged(false);
+}
+function bodyDragAllowed(it) {
+  if (!it || it === 'tank' || it.kind === 'block') return false;
+  if (editor.tool === 'rotate') return canRotate(it);
+  if (editor.tool === 'scale') return canScale(it);
+  return true;
+}
 
 // ---------- modal transforms (G / R / S) ----------
 function startModal(type, cx, cy) {
   const it = selected();
   if (!it || editor.drag) return;
-  if (type === 'rotate' && !(it.kind === 'obstacle' || it.kind === 'drain' || it.kind === 'source')) return;
-  if (type === 'scale' && !scaleMap(it)) return;
+  if (type === 'rotate' && !canRotate(it)) { toast(toolNote('rotate', it) || 'この項目は回転できません', 2000); return; }
+  if (type === 'scale' && !canScale(it)) { toast(toolNote('scale', it) || 'この項目は大きさを変えられません', 2000); return; }
   const ray = rayAt(cx, cy);
   const m = { type, item: it, start: cloneScene(it), axis: -1, cx, cy };
-  m.plane0 = rayPlane(ray, it.pos, view.fwd);
+  m.plane0 = rayPlane(ray, it.pos, [0, 1, 0]);
   const pc = project(it.pos);
   m.ang0 = Math.atan2(cy - pc.y, cx - pc.x);
-  m.r0 = Math.max(Math.hypot(cx - pc.x, cy - pc.y), 10);
+  m.r0 = Math.max(Math.hypot(cx - pc.x, cy - pc.y), 50);
   m.R0 = itemRot(it);
   editor.modal = m;
   updateHint();
@@ -4113,35 +4507,35 @@ function updateModal(cx, cy, shift) {
   const m = editor.modal, it = m.item;
   const ray = rayAt(cx, cy);
   const pc = project(m.start.pos);
+  if (m.typed) return;
   if (m.type === 'move') {
     if (m.axis >= 0) {
-      const s0 = rayLineParam(rayAt(m.cx, m.cy), m.start.pos, AXES[m.axis]);
-      const s = rayLineParam(ray, m.start.pos, AXES[m.axis]);
-      if (s !== null && s0 !== null) it.pos = clampPos(v3.add(m.start.pos, v3.mul(AXES[m.axis], snap(s - s0, shift))));
+      const ax = uiAxisDir(m.axis);
+      const s0 = rayLineParam(rayAt(m.cx, m.cy), m.start.pos, ax);
+      const s = rayLineParam(ray, m.start.pos, ax);
+      if (s !== null && s0 !== null) setPos(it, v3.add(m.start.pos, v3.mul(ax, snap(s - s0, shift))));
     } else {
-      const hit = rayPlane(ray, m.start.pos, view.fwd);
-      if (hit && m.plane0) { const dl = v3.sub(hit, m.plane0); it.pos = clampPos(v3.add(m.start.pos, dl.map((x) => snap(x, shift)))); }
+      // without an axis the item slides over the floor plane through it (Z moves it up and down)
+      const hit = rayPlane(ray, m.start.pos, [0, 1, 0]);
+      if (hit && m.plane0) setPos(it, [m.start.pos[0] + snap(hit[0] - m.plane0[0], shift), m.start.pos[1], m.start.pos[2] + snap(hit[2] - m.plane0[2], shift)]);
     }
   } else if (m.type === 'rotate') {
     let da = Math.atan2(cy - pc.y, cx - pc.x) - m.ang0;
     if (shift) da = Math.round(da / (15 * DEG)) * 15 * DEG;
+    const axis = m.axis >= 0 ? uiAxisDir(m.axis) : view.fwd.map((x) => -x);
     if (it.kind === 'source') {
-      const axis = m.axis >= 0 ? AXES[m.axis] : view.fwd.map((x) => -x);
-      const R = m3.axisAngle(axis, -da);
-      const dir = m3.apply(R, sourceDir(m.start));
-      it.pitch = Math.round(Math.asin(clamp(dir[1], -1, 1)) / DEG * 10) / 10;
-      it.yaw = Math.round((((Math.atan2(dir[0], dir[2]) / DEG) % 360) + 360) % 360 * 10) / 10;
+      setAim(it, m3.apply(m3.axisAngle(axis, -da), sourceDir(m.start)), false);
     } else {
-      const axis = m.axis >= 0 ? AXES[m.axis] : view.fwd.map((x) => -x);
       const sgn = m.axis >= 0 ? -Math.sign(v3.dot(axis, view.fwd) || -1) : 1;
       setItemRotation(it, m3.mul(m3.axisAngle(axis, -da * sgn), m.R0));
     }
   } else if (m.type === 'scale') {
-    let ratio = Math.max(0.05, Math.hypot(cx - pc.x, cy - pc.y) / m.r0);
+    let ratio = clamp(Math.hypot(cx - pc.x, cy - pc.y) / m.r0, 0.05, 20);
     if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
     const map = scaleMap(it);
-    const keys = m.axis >= 0 ? map[m.axis] : [...map[0], ...map[1], ...map[2]];
+    const keys = m.axis >= 0 ? map[localOfUI(it, m.axis)] : [...map[0], ...map[1], ...map[2]];
     setDims(it, m.start, keys, ratio);
+    afterScale(it, m.start, ratio, cx, cy);
   }
   m.lastX = cx; m.lastY = cy;
   sceneChanged(false);
@@ -4149,6 +4543,7 @@ function updateModal(cx, cy, shift) {
 function endModal(commit) {
   const m = editor.modal;
   if (!m) return;
+  editor.readout = null;
   if (!commit) { Object.assign(m.item, cloneScene(m.start)); sceneChanged(false); }
   else pushUndo();
   editor.modal = null;
@@ -4193,6 +4588,7 @@ function frameAll() {
   const half = Math.min(cam.fov / 2, Math.atan(Math.tan(cam.fov / 2) * aspect));
   return { target: [0, scene.tank.h * 0.35, 0], dist: (r / Math.tan(half)) * 0.62 };
 }
+function viewHome() { animateCamera({ ...frameAll(), ...VIEW_PRESETS.home }); }
 function stepCameraAnim(dt) {
   if (!camAnim) return;
   camAnim.t = Math.min(1, camAnim.t + dt / 0.55);
@@ -4210,10 +4606,13 @@ function stepCameraAnim(dt) {
 }
 
 // ---------- pointer events on the viewport ----------
+// Press on empty space or on an item that is not selected: dragging moves the camera, a click selects.
+// Press on the selected item: dragging applies the active tool to it.
 gpuCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 gpuCanvas.addEventListener('pointerdown', (e) => {
   gpuCanvas.focus({ preventScroll: true });
   closeMenus();
+  editor.touch = e.pointerType !== 'mouse';
   const [cx, cy] = localXY(e);
   editor.pointers.set(e.pointerId, { x: cx, y: cy });
   gpuCanvas.setPointerCapture(e.pointerId);
@@ -4223,6 +4622,8 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   }
   if (editor.pointers.size === 2) {
     const [a, b] = [...editor.pointers.values()];
+    const d = editor.drag;
+    if (d && (d.kind === 'gizmo' || d.kind === 'body') && d.moved) { Object.assign(d.item, cloneScene(d.start)); sceneChanged(false); }
     editor.drag = null;
     editor.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, dist: cam.dist };
     return;
@@ -4230,20 +4631,16 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   if (editor.pointers.size > 2) return;
   camAnim = null;
   if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
-    editor.drag = { kind: e.shiftKey ? 'pan' : 'orbit', x: cx, y: cy };
+    editor.drag = { kind: e.shiftKey || e.button === 1 && e.ctrlKey ? 'pan' : 'orbit', x: cx, y: cy };
     return;
   }
   if (e.button !== 0) return;
   const h = hitHandle(cx, cy);
   if (h) { beginGizmoDrag(h, cx, cy); return; }
   const it = pickItem(cx, cy);
-  if (it) {
-    if (selectedId !== it.id) select(it.id);
-    const ray = rayAt(cx, cy);
-    editor.drag = { kind: 'body', item: it, start: cloneScene(it), x: cx, y: cy, hit0: rayPlane(ray, it.pos, [0, 1, 0]), moved: false };
-    return;
-  }
-  editor.drag = { kind: e.shiftKey ? 'pan' : 'orbit', x: cx, y: cy, click: true, moved: false };
+  const sel = selected();
+  if (it && it !== 'tank' && it === sel && bodyDragAllowed(it)) { beginBodyDrag(it, cx, cy); return; }
+  editor.drag = { kind: e.shiftKey || editor.panMode ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, click: true, moved: false, pick: it };
 });
 gpuCanvas.addEventListener('pointermove', (e) => {
   const [cx, cy] = localXY(e);
@@ -4255,7 +4652,7 @@ gpuCanvas.addEventListener('pointermove', (e) => {
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     cam.dist = clamp(editor.pinch.dist * editor.pinch.d0 / Math.max(d, 1), 0.06, 8);
-    orbit(mx - editor.pinch.mx, my - editor.pinch.my);
+    pan(mx - editor.pinch.mx, my - editor.pinch.my);
     editor.pinch.mx = mx; editor.pinch.my = my;
     limitCamera();
     return;
@@ -4263,48 +4660,41 @@ gpuCanvas.addEventListener('pointermove', (e) => {
   const d = editor.drag;
   if (!d) {
     if (e.pointerType === 'mouse') {
+      editor.touch = false;
       const h = hitHandle(cx, cy);
       editor.hover = h;
-      gpuCanvas.style.cursor = h ? 'pointer' : pickItem(cx, cy) ? 'move' : 'default';
+      const it = h ? null : pickItem(cx, cy);
+      gpuCanvas.style.cursor = h ? 'pointer' : it && it === selected() && bodyDragAllowed(it) ? 'move' : it ? 'pointer' : 'default';
     }
     return;
   }
   if (d.kind === 'gizmo') { updateGizmoDrag(cx, cy, e.shiftKey); return; }
-  const dx = cx - d.x, dy = cy - d.y;
   if (d.kind === 'orbit' || d.kind === 'pan') {
-    if (Math.abs(dx) + Math.abs(dy) > 0) d.moved = true;
+    if (d.click && !d.moved && Math.hypot(cx - d.sx, cy - d.sy) < (editor.touch ? 8 : 3)) return;
+    d.moved = true;
+    const dx = cx - d.x, dy = cy - d.y;
     if (d.kind === 'orbit') orbit(dx, dy); else pan(dx, dy);
     d.x = cx; d.y = cy;
     return;
   }
   if (d.kind === 'body') {
-    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved && Math.hypot(cx - d.x, cy - d.y) < (editor.touch ? 8 : 4)) return;
     d.moved = true;
-    const it = d.item;
-    const ray = rayAt(cx, cy);
-    if (e.shiftKey) {
-      const n = v3.norm([view.fwd[0], 0, view.fwd[2]]);
-      const hit = rayPlane(ray, d.start.pos, n);
-      if (!d.vhit0) d.vhit0 = hit;
-      if (hit && d.vhit0) it.pos = clampPos([d.start.pos[0], d.start.pos[1] + (hit[1] - d.vhit0[1]), d.start.pos[2]]);
-    } else {
-      d.vhit0 = null;
-      const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
-      if (hit && d.hit0) it.pos = clampPos([d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
-    }
-    sceneChanged(false);
+    updateBodyDrag(cx, cy, e.shiftKey);
   }
 });
 function endPointer(e) {
   editor.pointers.delete(e.pointerId);
-  if (editor.pinch) { if (editor.pointers.size < 2) editor.pinch = null; return; }
+  if (editor.pinch) { if (editor.pointers.size === 0) editor.pinch = null; return; }
   const d = editor.drag;
   if (!d) return;
   editor.drag = null;
+  editor.readout = null;
   if (d.kind === 'gizmo' || d.kind === 'body') {
     if (d.moved) { pushUndo(); refreshPanels(); }
   } else if (d.click && !d.moved && e.type === 'pointerup') {
-    select(null);
+    const id = d.pick === 'tank' ? 'tank' : d.pick ? d.pick.id : null;
+    if (id !== selectedId) select(id, { reveal: true });
   }
 }
 gpuCanvas.addEventListener('pointerup', endPointer);
@@ -4312,7 +4702,9 @@ gpuCanvas.addEventListener('pointercancel', endPointer);
 gpuCanvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   camAnim = null;
-  const k = Math.exp(clamp(e.deltaY, -240, 240) * (e.deltaMode === 1 ? 0.04 : 0.0013));
+  // trackpads send pinch as ctrl+wheel; two-finger scrolling pans when it is mostly sideways
+  if (!e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.2) { pan(-e.deltaX, 0); return; }
+  const k = Math.exp(clamp(e.deltaY, -240, 240) * (e.deltaMode === 1 ? 0.04 : e.ctrlKey ? 0.01 : 0.0013));
   zoom(k);
 }, { passive: false });
 
@@ -4324,33 +4716,40 @@ function navDrag(el, fn) {
     camAnim = null;
     let lx = e.clientX, ly = e.clientY, moved = false;
     const sx = e.clientX, sy = e.clientY;
-    const move = (ev) => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 2) moved = true; fn(ev.clientX - lx, ev.clientY - ly); lx = ev.clientX; ly = ev.clientY; };
+    const move = (ev) => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 3) moved = true; if (moved) fn(ev.clientX - lx, ev.clientY - ly); lx = ev.clientX; ly = ev.clientY; };
     const up = (ev) => {
       el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
-      if (!moved && el === $('navball')) navClick(ev);
+      if (!moved && ev.type === 'pointerup') navClick(ev);
     };
     el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   });
 }
 navDrag($('navball'), (dx, dy) => orbit(dx * 1.2, dy * 1.2));
-navDrag($('nav-zoom'), (dx, dy) => zoom(Math.exp(dy * 0.008)));
-navDrag($('nav-pan'), (dx, dy) => pan(dx, dy));
+$('nav-in').addEventListener('click', () => { camAnim = null; animateCamera({ dist: clamp(cam.dist / 1.35, 0.06, 8) }); });
+$('nav-out').addEventListener('click', () => { camAnim = null; animateCamera({ dist: clamp(cam.dist * 1.35, 0.06, 8) }); });
+$('nav-home').addEventListener('click', viewHome);
+function setPanMode(on) {
+  editor.panMode = on;
+  $('nav-pan').setAttribute('aria-pressed', String(on));
+  updateHint();
+}
+$('nav-pan').addEventListener('click', () => setPanMode(!editor.panMode));
 function navBallAxes() {
   const el = $('navball');
   const vr = $('view').getBoundingClientRect(), r = el.getBoundingClientRect();
   const cx = r.left - vr.left + r.width / 2, cy = r.top - vr.top + r.height / 2, R = r.width * 0.36;
-  return AXES.flatMap((ax, i) => [1, -1].map((s) => {
-    const a = v3.mul(ax, s);
+  return [0, 1, 2].flatMap((i) => [1, -1].map((s) => {
+    const a = v3.mul(uiAxisDir(i), s);
     return { i, s, x: cx + v3.dot(a, view.right) * R, y: cy - v3.dot(a, view.up) * R, z: v3.dot(a, view.fwd.map((q) => -q)) };
   }));
 }
 function navClick(ev) {
   const vr = $('view').getBoundingClientRect();
   const x = ev.clientX - vr.left, y = ev.clientY - vr.top;
-  let best = null, bd = 12;
+  let best = null, bd = ev.pointerType === 'mouse' ? 13 : 20;
   for (const a of navBallAxes()) { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a; } }
   if (!best) return;
-  const dir = v3.mul(AXES[best.i], best.s);
+  const dir = v3.mul(uiAxisDir(best.i), best.s);
   const el = Math.asin(clamp(dir[1], -1, 1));
   animateCamera({ el: Math.abs(el) > 1.5 ? Math.sign(el) * 1.5707 : el, az: Math.abs(el) > 1.5 ? cam.az : Math.atan2(dir[0], dir[2]) });
 }
@@ -4368,23 +4767,26 @@ function drawArrow(a, b, color, width, head) {
     octx.closePath(); octx.fill();
   }
 }
+function drawEdges(edges, style, width, dash) {
+  octx.setLineDash(dash || []);
+  octx.strokeStyle = style; octx.lineWidth = width;
+  octx.beginPath();
+  for (const [a, b] of edges) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) { octx.moveTo(pa.x, pa.y); octx.lineTo(pb.x, pb.y); } }
+  octx.stroke();
+  octx.setLineDash([]);
+}
 function drawOverlay() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   if (overlay.width !== Math.round(cssW * dpr) || overlay.height !== Math.round(cssH * dpr)) { overlay.width = Math.round(cssW * dpr); overlay.height = Math.round(cssH * dpr); }
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
   octx.clearRect(0, 0, cssW, cssH);
   octx.lineCap = 'round'; octx.lineJoin = 'round';
+  if (selectedId === 'tank') drawEdges(tankEdges(), 'rgba(255,170,60,0.95)', 2);
   if (settings.guides) {
     for (const it of scene.items) {
       const sel = it.id === selectedId;
       if (it.kind === 'block') {
-        octx.setLineDash(sel ? [] : [5, 4]);
-        octx.strokeStyle = sel ? 'rgba(255,170,60,0.95)' : 'rgba(110,190,240,0.75)';
-        octx.lineWidth = sel ? 1.6 : 1.2;
-        octx.beginPath();
-        for (const [a, b] of blockEdges(it)) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) { octx.moveTo(pa.x, pa.y); octx.lineTo(pb.x, pb.y); } }
-        octx.stroke();
-        octx.setLineDash([]);
+        drawEdges(blockEdges(it), sel ? 'rgba(255,170,60,0.95)' : 'rgba(110,190,240,0.75)', sel ? 1.6 : 1.2, sel ? [] : [5, 4]);
       } else if (it.kind === 'source') {
         const p = project(it.pos);
         if (!p.ok) continue;
@@ -4399,7 +4801,7 @@ function drawOverlay() {
         }
         const L = 46 * worldPerPx(it.pos);
         const tip = project(v3.add(it.pos, v3.mul(sourceDir(it), L)));
-        if (it.mode !== 'rain' && editor.tool !== 'rotate' || !sel) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.9)' : 'rgba(160,170,175,0.7)', 1.6, true);
+        if (!(sel && editor.tool === 'rotate')) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.9)' : 'rgba(160,170,175,0.7)', 1.6, it.mode !== 'rain');
         octx.fillStyle = it.enabled ? '#6ebef0' : '#8e989d';
         octx.beginPath(); octx.arc(p.x, p.y, 3.2, 0, Math.PI * 2); octx.fill();
       } else if (it.kind === 'drain' && sel) {
@@ -4413,31 +4815,44 @@ function drawOverlay() {
     for (const h of gizmoHandles(it)) {
       const hot = editor.drag && editor.drag.h === h || editor.hover && editor.hover.type === h.type && editor.hover.i === h.i;
       if (h.type === 'axis' || h.type === 'scale') {
-        const col = AXIS_COLORS[h.i];
-        drawArrow(h.a, h.b, col, hot ? 3.2 : 2.2, h.type === 'axis');
-        if (h.type === 'scale') { octx.fillStyle = col; octx.fillRect(h.b.x - 5, h.b.y - 5, 10, 10); }
+        const col = AXIS_COLORS[h.ci];
+        drawArrow(h.a, h.b, col, hot ? 3.4 : 2.4, false);
+        octx.fillStyle = col;
+        octx.beginPath();
+        if (h.type === 'scale') octx.rect(h.b.x - h.knob, h.b.y - h.knob, h.knob * 2, h.knob * 2);
+        else octx.arc(h.b.x, h.b.y, hot ? h.knob + 1.5 : h.knob, 0, Math.PI * 2);
+        octx.fill();
+        octx.strokeStyle = 'rgba(16,19,22,0.85)'; octx.lineWidth = 1.2; octx.stroke();
       } else if (h.type === 'free' || h.type === 'uscale') {
-        octx.strokeStyle = 'rgba(255,255,255,0.9)'; octx.lineWidth = hot ? 2.4 : 1.6;
+        octx.strokeStyle = 'rgba(255,255,255,0.92)'; octx.lineWidth = hot ? 2.6 : 1.8;
         octx.beginPath();
         if (h.type === 'free') octx.arc(h.a.x, h.a.y, h.r, 0, Math.PI * 2); else octx.rect(h.a.x - h.r, h.a.y - h.r, h.r * 2, h.r * 2);
         octx.stroke();
       } else if (h.type === 'ring') {
-        octx.strokeStyle = AXIS_COLORS[h.i]; octx.lineWidth = hot ? 3.2 : 2;
+        octx.strokeStyle = AXIS_COLORS[h.ci]; octx.lineWidth = hot ? 3.6 : 2.4;
         octx.beginPath();
         let started = false;
         for (const q of h.pts) { if (!q.ok) { started = false; continue; } if (started) octx.lineTo(q.x, q.y); else { octx.moveTo(q.x, q.y); started = true; } }
         octx.stroke();
       } else if (h.type === 'aim') {
         drawArrow(h.a, h.b, '#f2a43a', hot ? 3 : 2.2, false);
-        octx.fillStyle = '#f2a43a'; octx.beginPath(); octx.arc(h.b.x, h.b.y, hot ? 8 : 6.5, 0, Math.PI * 2); octx.fill();
+        octx.fillStyle = '#f2a43a'; octx.beginPath(); octx.arc(h.b.x, h.b.y, hot ? h.knob + 1.5 : h.knob, 0, Math.PI * 2); octx.fill();
       }
     }
   }
   if (editor.modal && editor.modal.axis >= 0) {
     const m = editor.modal;
-    const c = m.start.pos, ax = AXES[m.axis], L = 4;
+    const c = m.start.pos, ax = uiAxisDir(m.axis), L = 4;
     const a = project(v3.sub(c, v3.mul(ax, L))), b = project(v3.add(c, v3.mul(ax, L)));
     if (a.ok && b.ok) drawArrow(a, b, AXIS_COLORS[m.axis], 1.4, false);
+  }
+  if (editor.readout) {
+    const r = editor.readout;
+    octx.font = '600 13px "IBM Plex Mono", monospace'; octx.textAlign = 'left'; octx.textBaseline = 'middle';
+    const w = octx.measureText(r.text).width + 12;
+    const x = Math.min(r.x + 18, cssW - w - 4), y = Math.max(r.y - 18, 14);
+    octx.fillStyle = 'rgba(16,19,22,0.85)'; octx.fillRect(x, y - 11, w, 22);
+    octx.fillStyle = '#ffd9a3'; octx.fillText(r.text, x + 6, y + 0.5);
   }
   // navigation ball
   const axes = navBallAxes().sort((p, q) => p.z - q.z);
@@ -4448,8 +4863,8 @@ function drawOverlay() {
     if (a.s > 0) { octx.strokeStyle = col; octx.lineWidth = 2; octx.beginPath(); octx.moveTo(ncx, ncy); octx.lineTo(a.x, a.y); octx.stroke(); }
     octx.fillStyle = a.s > 0 ? col : 'rgba(30,34,38,0.9)';
     octx.strokeStyle = col; octx.lineWidth = 1.5;
-    octx.beginPath(); octx.arc(a.x, a.y, a.s > 0 ? 8 : 6, 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
-    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = '600 10px "IBM Plex Mono", monospace'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
+    octx.beginPath(); octx.arc(a.x, a.y, a.s > 0 ? 8.5 : 6.5, 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
+    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = '600 11px "IBM Plex Mono", monospace'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
   }
 }
 
@@ -4458,50 +4873,80 @@ function drawOverlay() {
 //  Panels: menus, scene list, properties, transport
 // ============================================================
 const settings = { playing: true, speed: 1, guides: true, whitewater: true, quality: 'standard' };
+const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+const narrowMQ = window.matchMedia('(max-width: 820px)');
 
 // ---------- undo ----------
+// Each entry is a scene snapshot plus the selection, which follows the user's clicks until the next edit, so that
+// undo comes back with the item that was being edited. `reset` marks a step that replaced the whole scene (a sample,
+// a new scene, an opened file); crossing it with undo or redo also puts the water back to the starting state of the
+// scene it lands on.
 const undoStack = [], redoStack = [];
-let lastSnapshot = null;
-function snapshot() { return JSON.stringify({ scene, selectedId }); }
-function pushUndo() {
-  const s = snapshot();
-  if (s === lastSnapshot) return;
-  if (lastSnapshot) undoStack.push(lastSnapshot);
+let current = null;
+function pushUndo(reset = false) {
+  const s = JSON.stringify(scene);
+  if (current && s === current.s) { current.sel = selectedId; return; }
+  if (current) undoStack.push(current);
   if (undoStack.length > 120) undoStack.shift();
   redoStack.length = 0;
-  lastSnapshot = s;
+  current = { s, sel: selectedId, reset };
   updateUndoButtons();
   saveSoon();
 }
-function restore(s) {
-  const o = JSON.parse(s);
-  const tankChanged = JSON.stringify(o.scene.tank) !== JSON.stringify(scene.tank);
-  scene.tank = o.scene.tank;
-  scene.items = o.scene.items;
+function restore(entry, waterToo) {
+  const o = JSON.parse(entry.s);
+  const tankChanged = JSON.stringify(o.tank) !== JSON.stringify(scene.tank);
+  scene.tank = o.tank;
+  scene.items = o.items;
   uid = Math.max(uid, ...scene.items.map((i) => i.id + 1));
-  selectedId = o.selectedId && (o.selectedId === 'tank' || getItem(o.selectedId)) ? o.selectedId : null;
-  lastSnapshot = s;
+  selectedId = entry.sel && (entry.sel === 'tank' || getItem(entry.sel)) ? entry.sel : null;
+  current = entry;
   if (tankChanged) rebuildSim(true);
+  else if (waterToo) resetSim(true);
   sceneChanged(true);
   updateUndoButtons();
+  selectionChanged();
   saveSoon();
 }
-function undo() { if (!undoStack.length) return; redoStack.push(lastSnapshot); restore(undoStack.pop()); toast('元に戻しました', 1200); }
-function redo() { if (!redoStack.length) return; undoStack.push(lastSnapshot); restore(redoStack.pop()); toast('やり直しました', 1200); }
-function updateUndoButtons() { $('btn-undo').disabled = !undoStack.length; $('btn-redo').disabled = !redoStack.length; }
-$('btn-undo').addEventListener('click', undo);
-$('btn-redo').addEventListener('click', redo);
+function undo() {
+  if (!undoStack.length) return;
+  const from = current;
+  redoStack.push(from);
+  restore(undoStack.pop(), from.reset);
+  toast('元に戻しました', 1200);
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(current);
+  const to = redoStack.pop();
+  restore(to, to.reset);
+  toast('やり直しました', 1200);
+}
+function updateUndoButtons() {
+  document.querySelectorAll('[data-undo]').forEach((b) => { b.disabled = !undoStack.length; });
+  document.querySelectorAll('[data-redo]').forEach((b) => { b.disabled = !redoStack.length; });
+}
+document.querySelectorAll('[data-undo]').forEach((b) => b.addEventListener('click', undo));
+document.querySelectorAll('[data-redo]').forEach((b) => b.addEventListener('click', redo));
 
 let saveTimer = 0;
-function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('suiri-lab-scene', JSON.stringify({ v: 1, scene, cam: { target: cam.target, dist: cam.dist, az: cam.az, el: cam.el } })), 400); }
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('suiri-lab-scene', JSON.stringify(sceneFile())), 400); }
+function sceneFile() { return { v: 1, app: 'suiri-lab', scene, cam: { target: cam.target, dist: cam.dist, az: cam.az, el: cam.el } }; }
 
 // ---------- selection & refresh ----------
-function select(id) {
+// opts.reveal: the selection came from the 3D view, so on narrow screens the settings sheet follows it
+function select(id, opts = {}) {
   selectedId = id;
+  if (current) current.sel = id;
   editor.hover = null;
   refreshPanels();
-  updateHint();
+  selectionChanged();
+  if (narrowMQ.matches && opts.reveal) {
+    if (id !== null) openSheet('props');
+    else if (sheet.auto) closeSheet();
+  }
 }
+function selectionChanged() { updateHint(); updateToolButtons(); }
 let panelsDirty = true;
 function sceneChanged(structural) {
   if (structural) panelsDirty = true;
@@ -4510,29 +4955,26 @@ function sceneChanged(structural) {
 function refreshPanels() { panelsDirty = true; }
 
 // ---------- menus ----------
-const MENU_ADD = [
-  { grp: '障害物' },
-  ...['box', 'plate', 'sphere', 'cylinder', 'cone', 'torus', 'cup', 'container', 'gutter'].map((s) => ({ label: SHAPES[s].label, icon: ICONS.obstacle, act: () => addItem(makeObstacle(s)) })),
-  { sep: true },
-  { grp: '水' },
-  { label: '水源', icon: ICONS.source, act: () => addItem(makeSource()) },
-  { label: '水の塊', icon: ICONS.block, act: () => addItem(makeBlock()) },
-  { label: '排水口', icon: ICONS.drain, act: () => addItem(makeDrain()) },
-];
-function buildMenu(dd, entries) {
-  dd.innerHTML = '';
-  for (const e of entries) {
-    if (e.sep) { const s = document.createElement('div'); s.className = 'sep'; dd.appendChild(s); continue; }
-    if (e.grp) { const g = document.createElement('div'); g.className = 'grp'; g.textContent = e.grp; dd.appendChild(g); continue; }
-    const b = document.createElement('button');
-    b.type = 'button';
-    if (e.check !== undefined) { b.className = 'check'; b.setAttribute('role', 'menuitemcheckbox'); b.setAttribute('aria-checked', String(!!e.check())); }
-    else b.setAttribute('role', 'menuitem');
-    b.innerHTML = (e.icon || '') + '<span></span>' + (e.key ? `<span class="k">${e.key}</span>` : '');
-    b.querySelector('span').textContent = e.label;
-    b.addEventListener('click', () => { closeMenus(); e.act(); });
-    dd.appendChild(b);
-  }
+function addMenu() {
+  return [
+    { grp: '物体' },
+    ...['box', 'plate', 'sphere', 'cylinder', 'cone', 'torus', 'cup', 'container', 'gutter'].map((s) => ({ label: SHAPES[s].label, icon: SHAPE_ICONS[s], act: () => addItem(makeObstacle(s)) })),
+    { sep: true },
+    { grp: '水' },
+    { label: '水源', sub: '蛇口・水滴・シャワー・雨など', icon: ICONS.source, act: () => addItem(makeSource()) },
+    { label: '水の塊', sub: '置いた所にすぐ水が入ります', icon: ICONS.block, act: () => addItem(makeBlock()) },
+    { label: '排水口', sub: '触れた水を吸い込みます', icon: ICONS.drain, act: () => addItem(makeDrain()) },
+  ];
+}
+function fileMenu() {
+  return [
+    { label: '新規（空の水槽）', act: newScene },
+    { label: 'ファイルを開く…', act: openFile },
+    { label: 'ファイルに保存', act: saveFile },
+    { sep: true },
+    { grp: 'サンプル' },
+    ...PRESETS.map((p) => ({ label: p.label, act: () => loadPreset(p) })),
+  ];
 }
 function viewMenu() {
   return [
@@ -4540,52 +4982,108 @@ function viewMenu() {
     { label: '水源・水の塊などの目印', check: () => settings.guides, act: () => { settings.guides = !settings.guides; } },
     { label: '白い泡としぶき', check: () => settings.whitewater, act: () => { settings.whitewater = !settings.whitewater; } },
     { sep: true },
-    { grp: '計算の細かさ' },
-    ...Object.entries(QUALITY).map(([k, q]) => ({ label: q.label, check: () => settings.quality === k, act: () => { if (settings.quality !== k) { settings.quality = k; rebuildSim(true); toast(`計算の細かさを「${q.label}」にしました`); } } })),
+    { grp: '計算の細かさ（細かいほど重くなります）' },
+    ...Object.entries(QUALITY).map(([k, q]) => ({ label: q.label, radio: () => settings.quality === k, act: () => setQuality(k) })),
     { sep: true },
     { grp: '視点' },
-    { label: '全体', key: 'Home', act: () => animateCamera({ ...frameAll(), ...VIEW_PRESETS.home }) },
-    { label: '正面', key: '1', act: () => animateCamera({ ...VIEW_PRESETS.front, ...frameAll() }) },
-    { label: '横', key: '3', act: () => animateCamera({ ...VIEW_PRESETS.side, ...frameAll() }) },
-    { label: '真上', key: '7', act: () => animateCamera({ ...VIEW_PRESETS.top, ...frameAll() }) },
-    { label: '選択した物に寄る', key: '.', act: focusSelected },
+    { label: '全体', key: 'Home', act: viewHome },
+    { label: '正面から', key: '1', act: () => animateCamera({ ...VIEW_PRESETS.front, ...frameAll() }) },
+    { label: '右から', key: '3', act: () => animateCamera({ ...VIEW_PRESETS.side, ...frameAll() }) },
+    { label: '真上から', key: '7', act: () => animateCamera({ ...VIEW_PRESETS.top, ...frameAll() }) },
+    { label: '選んだ物に寄る', key: '.', act: focusSelected },
   ];
 }
-const menus = [['m-add', 'dd-add', () => MENU_ADD], ['m-sample', 'dd-sample', () => PRESETS.map((p) => ({ label: p.label, act: () => loadPreset(p) }))], ['m-view', 'dd-view', viewMenu]];
+function buildMenu(dd, entries) {
+  dd.innerHTML = '';
+  for (const e of entries) {
+    if (e.sep) { const s = document.createElement('div'); s.className = 'sep'; dd.appendChild(s); continue; }
+    if (e.grp) { const g = document.createElement('div'); g.className = 'grp'; g.textContent = e.grp; dd.appendChild(g); continue; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    if (e.check) { b.className = 'check'; b.setAttribute('role', 'menuitemcheckbox'); b.setAttribute('aria-checked', String(!!e.check())); }
+    else if (e.radio) { b.className = 'radio'; b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', String(!!e.radio())); }
+    else b.setAttribute('role', 'menuitem');
+    b.innerHTML = (e.icon || '') + '<span><span class="t"></span>' + (e.sub ? '<span class="sub"></span>' : '') + '</span>' + (e.key ? `<span class="k">${e.key}</span>` : '');
+    b.querySelector('.t').textContent = e.label;
+    if (e.sub) b.querySelector('.sub').textContent = e.sub;
+    b.addEventListener('click', () => { closeMenus(); e.act(); });
+    dd.appendChild(b);
+  }
+}
+const menus = [['m-file', 'dd-file', fileMenu], ['m-add', 'dd-add', addMenu], ['m-view', 'dd-view', viewMenu]];
 function closeMenus() {
-  for (const [b, d] of menus) { $(d).hidden = true; $(b).setAttribute('aria-expanded', 'false'); }
+  for (const [b, d] of menus) { const dd = $(d); dd.hidden = true; dd.style.cssText = ''; $(b).setAttribute('aria-expanded', 'false'); }
+}
+// opens a menu under its button, or at a point on the screen (Shift+A at the pointer); always kept inside the window
+function openMenu(btn, dd, make, at) {
+  closeMenus();
+  const el = $(dd);
+  buildMenu(el, make());
+  el.hidden = false;
+  $(btn).setAttribute('aria-expanded', 'true');
+  if (at) { el.style.position = 'fixed'; el.style.left = at[0] + 'px'; el.style.top = at[1] + 'px'; }
+  const r = el.getBoundingClientRect();
+  const over = r.right - (window.innerWidth - 6);
+  if (over > 0) el.style.left = (at ? at[0] - over : parseFloat(getComputedStyle(el).left) - over) + 'px';
+  const r2 = el.getBoundingClientRect();
+  if (r2.left < 6) el.style.left = (parseFloat(el.style.left || '0') + 6 - r2.left) + 'px';
+  if (at && r2.bottom > window.innerHeight - 6) el.style.top = Math.max(6, at[1] - (r2.bottom - (window.innerHeight - 6))) + 'px';
+  const f = el.querySelector('button');
+  if (f) f.focus({ preventScroll: true });
 }
 for (const [btn, dd, make] of menus) {
   $(btn).addEventListener('click', (e) => {
     e.stopPropagation();
-    const open = $(dd).hidden;
-    closeMenus();
-    if (open) { buildMenu($(dd), make()); $(dd).hidden = false; $(btn).setAttribute('aria-expanded', 'true'); const f = $(dd).querySelector('button'); if (f) f.focus(); }
+    if ($(dd).hidden) openMenu(btn, dd, make); else closeMenus();
   });
 }
 document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.menu')) closeMenus(); });
 
 // ---------- adding / removing ----------
-function placementPoint() {
-  // where the camera looks, on the tank floor, kept inside the tank
+// a spot on the floor inside the tank, clear of other items and close to where the camera looks
+function footprint(it) {
+  if (it.kind === 'obstacle') return boundRadius(it);
+  if (it.kind === 'drain') return it.r;
+  if (it.kind === 'source') return it.mode === 'rain' ? it.rainSize / 2 : 0.03;
+  return Math.hypot(it.dims.w, it.dims.d) / 2;
+}
+function freeSpot(r, avoidBlocks) {
   const t = scene.tank;
-  return [clamp(cam.target[0], -t.w / 2 + 0.05, t.w / 2 - 0.05), 0, clamp(cam.target[2], -t.d / 2 + 0.05, t.d / 2 - 0.05)];
+  const others = scene.items.filter((x) => x.kind !== 'block' || avoidBlocks).map((x) => ({ p: x.pos, r: footprint(x) }));
+  const mx = Math.max(t.w / 2 - r - 0.01, 0), mz = Math.max(t.d / 2 - r - 0.01, 0);
+  let best = [0, 0], bs = -Infinity;
+  for (let i = 0; i <= 10; i++) for (let k = 0; k <= 8; k++) {
+    const x = -mx + (2 * mx * i) / 10, z = -mz + (2 * mz * k) / 8;
+    let clear = 1;
+    for (const o of others) clear = Math.min(clear, Math.hypot(x - o.p[0], z - o.p[2]) - o.r - r);
+    const score = Math.min(clear, 0.04) * 20 - Math.hypot(x - cam.target[0], z - cam.target[2]);
+    if (score > bs) { bs = score; best = [x, z]; }
+  }
+  return best;
+}
+function placeNew(it) {
+  const [x, z] = freeSpot(footprint(it), it.kind === 'block');
+  if (it.kind === 'obstacle') { it.pos = [x, 0.3, z]; it.pos[1] += -obstacleBottom(it) + 0.0005; }
+  else if (it.kind === 'source') it.pos = [x, Math.min(scene.tank.h + 0.08, 0.5), z];
+  else if (it.kind === 'block') it.pos = [x, it.dims.h / 2 + 0.001, z];
+  else if (it.kind === 'drain') it.pos = [x, 0, z];
+}
+function uniqueName(base) {
+  const root = base.replace(/ \d+$/, '');
+  const used = new Set(scene.items.map((x) => x.name));
+  if (!used.has(root)) return root;
+  for (let n = 2; ; n++) if (!used.has(`${root} ${n}`)) return `${root} ${n}`;
 }
 function addItem(it) {
-  const p = placementPoint();
-  if (it.kind === 'obstacle') {
-    it.pos = [p[0], 0.2, p[2]];
-    it.pos[1] += 0.2 - obstacleBottom(it) - 0.2 + 0.0005;
-  } else if (it.kind === 'source') it.pos = [p[0], Math.min(scene.tank.h + 0.08, 0.5), p[2]];
-  else if (it.kind === 'block') it.pos = [p[0], it.dims.h / 2 + 0.001, p[2]];
-  else if (it.kind === 'drain') it.pos = [p[0], 0, p[2]];
-  const same = scene.items.filter((x) => x.name.replace(/ \d+$/, '') === it.name).length;
-  if (same > 0) it.name = `${it.name} ${same + 1}`;
+  placeNew(it);
+  it.name = uniqueName(it.name);
   scene.items.push(it);
-  select(it.id);
+  if (sim) sim.setObjects(scene.items, 0);
+  if (it.kind === 'block') sim.emitNow(blockEmits(sim, [it], true), true);
+  select(it.id, { reveal: true });
   pushUndo();
   sceneChanged(true);
-  toast(`「${it.name}」を追加しました`, 1600);
+  toast(it.kind === 'block' ? `「${it.name}」を追加して水を入れました` : `「${it.name}」を追加しました`, 2000);
 }
 function deleteSelected() {
   const it = selected();
@@ -4594,20 +5092,29 @@ function deleteSelected() {
   select(null);
   pushUndo();
   sceneChanged(true);
-  toast(`「${it.name}」を削除しました（Ctrl+Z で戻せます）`);
+  const msg = it.kind === 'block' ? `「${it.name}」を削除しました（いま水槽にある水はそのままです）` : `「${it.name}」を削除しました`;
+  toast(msg, 4000, { label: '元に戻す', run: undo });
 }
 function duplicateSelected(grab) {
   const it = selected();
   if (!it) return;
   const c = cloneScene(it);
   c.id = uid++;
-  c.name = it.name.replace(/ \d+$/, '') + ' ' + (scene.items.filter((x) => x.name.startsWith(it.name.replace(/ \d+$/, ''))).length + 1);
-  c.pos = [it.pos[0] + 0.03, it.pos[1], it.pos[2] + 0.03];
+  c.name = uniqueName(it.name);
+  if (grab) c.pos = [...it.pos];
+  else {
+    const r = footprint(it);
+    const t = scene.tank;
+    const side = it.pos[0] + 2.2 * r + 0.01 < t.w / 2 ? 1 : -1;
+    c.pos = clampItemPos(c, [it.pos[0] + side * (2 * r + 0.01), it.pos[1], it.pos[2]]);
+  }
   scene.items.push(c);
   select(c.id);
   pushUndo();
   sceneChanged(true);
+  if (c.kind === 'block') sim.emitNow(blockEmits(sim, [c], true), true);
   if (grab && lastPointer) startModal('move', lastPointer[0], lastPointer[1]);
+  else toast(`「${c.name}」を作りました`, 1600);
 }
 function focusSelected() {
   const it = selected();
@@ -4615,23 +5122,67 @@ function focusSelected() {
   const r = it.kind === 'obstacle' ? boundRadius(it) : it.kind === 'block' ? Math.max(it.dims.w, it.dims.h, it.dims.d) / 2 : 0.05;
   animateCamera({ target: [...it.pos].map((x, i) => (i === 1 ? Math.max(x, 0) : x)), dist: clamp(r * 4.5 + 0.12, 0.15, 3) });
 }
-$('btn-del').addEventListener('click', deleteSelected);
-$('btn-dup').addEventListener('click', () => duplicateSelected(false));
+function pourBlock(it) {
+  sim.emitNow(blockEmits(sim, [it], true), true);
+  toast(`「${it.name}」の形に水を入れました`, 1800);
+}
+$('btn-del').addEventListener('click', () => { if (selected()) deleteSelected(); else toolUnavailable('del'); });
+$('btn-dup').addEventListener('click', () => { if (selected()) duplicateSelected(false); else toolUnavailable('dup'); });
 
-// ---------- presets ----------
-function loadPreset(p, quiet) {
-  const s = p.make();
+// ---------- scenes: samples, new, files ----------
+function replaceScene(s, message) {
   scene.tank = s.tank;
   scene.items = s.items;
+  uid = Math.max(uid, ...scene.items.map((i) => (i.id | 0) + 1));
   selectedId = null;
   rebuildSim(true);
   sceneChanged(true);
-  pushUndo();
-  animateCamera({ ...frameAll(), ...VIEW_PRESETS.home });
-  if (!quiet) toast(`サンプル「${p.label}」を読み込みました`);
+  selectionChanged();
+  pushUndo(true);
+  viewHome();
+  if (message) toast(message, 4000, { label: '元に戻す', run: undo });
+}
+function loadPreset(p, quiet) { replaceScene(p.make(), quiet ? null : `サンプル「${p.label}」を開きました`); }
+function newScene() { replaceScene({ tank: { w: 0.6, h: 0.32, d: 0.4 }, items: [] }, '空の水槽にしました'); }
+function saveFile() {
+  const blob = new Blob([JSON.stringify(sceneFile(), null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'suiri-lab-scene.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('シーンをファイルに保存しました', 1800);
+}
+function validScene(o) {
+  if (!o || !o.scene || !o.scene.tank || !Array.isArray(o.scene.items)) return null;
+  const t = o.scene.tank;
+  if (![t.w, t.h, t.d].every((x) => Number.isFinite(x) && x > 0)) return null;
+  const items = o.scene.items.filter((it) => it && ['obstacle', 'source', 'block', 'drain'].includes(it.kind) && Array.isArray(it.pos) && it.pos.length === 3 && it.pos.every(Number.isFinite));
+  // fill in fields that an older file may not have, from fresh items of the same kind
+  const fresh = { obstacle: (it) => makeObstacle(SHAPES[it.shape] ? it.shape : 'box'), source: () => makeSource(), block: () => makeBlock(), drain: () => makeDrain() };
+  return { tank: { w: clamp(t.w, 0.2, 1.2), h: clamp(t.h, 0.1, 0.6), d: clamp(t.d, 0.15, 1.0) }, items: items.map((it) => { const base = fresh[it.kind](it); return { ...base, ...it, dims: it.dims ? { ...base.dims, ...it.dims } : base.dims }; }) };
+}
+function openFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json,application/json';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    f.text().then((txt) => {
+      let s = null;
+      try { s = validScene(JSON.parse(txt)); } catch (e) { s = null; }
+      if (!s) { toast('このファイルは水理ラボのシーンとして読めませんでした', 3000); return; }
+      replaceScene(s, `「${f.name}」を開きました`);
+    });
+  });
+  inp.click();
 }
 
-// ---------- number fields (drag to scrub, click to type) ----------
+// ---------- number fields (drag sideways to scrub, tap or type to enter a value) ----------
+const numberFields = new WeakMap();
 function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, min = -Infinity, max = Infinity, axis = null, prefix = null, zeroText = null, label, fill = null }) {
   const el = document.createElement('div');
   el.className = 'nf';
@@ -4641,83 +5192,113 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
   el.innerHTML = (fill ? '<span class="fill"></span>' : '') + (axis ? `<span class="ax ${axis}">${axis.toUpperCase()}</span>` : '') + (prefix ? '<span class="ax pre"></span>' : '') + '<span class="val"></span>';
   if (prefix) el.querySelector('.pre').textContent = prefix;
   const val = el.querySelector('.val');
-  const fmt = (v) => (zeroText && Math.abs(v) < 1e-9 ? zeroText : (v * scale).toFixed(digits) + (unit ? ' ' + unit : ''));
+  const lim = () => [typeof min === 'function' ? min() : min, typeof max === 'function' ? max() : max];
+  const num = (v) => (v * scale).toFixed(digits);
+  const fmt = (v) => (zeroText && Math.abs(v) < 1e-9 ? zeroText : num(v) + (unit ? ' ' + unit : ''));
   const render = () => {
     const v = get();
     val.textContent = fmt(v);
-    el.setAttribute('aria-valuenow', (v * scale).toFixed(digits));
+    el.setAttribute('aria-valuenow', num(v));
+    const [lo, hi] = lim();
+    if (Number.isFinite(lo) && Number.isFinite(hi)) el.title = `${label || ''}：${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''}`;
     if (fill) el.querySelector('.fill').style.width = `${clamp((v - fill[0]) / (fill[1] - fill[0]), 0, 1) * 100}%`;
   };
-  const apply = (v) => { set(clamp(v, min, max)); render(); };
+  // typed values outside the range are brought into it, and the range is shown
+  const apply = (v, typed) => {
+    const [lo, hi] = lim();
+    const c = clamp(v, lo, hi);
+    set(c);
+    render();
+    if (typed && Math.abs(c - v) > 1e-9) toast(`「${label}」は ${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''} の範囲です`, 2600);
+  };
   let start = null;
   el.addEventListener('pointerdown', (e) => {
-    if (el.querySelector('input')) return;
-    e.preventDefault();
-    el.setPointerCapture(e.pointerId);
-    start = { x: e.clientX, v: get(), moved: false };
-    el.classList.add('focus');
+    if (el.querySelector('input') || e.button > 0) return;
+    start = { x: e.clientX, y: e.clientY, v: get(), moved: false, touch: e.pointerType !== 'mouse', t: performance.now(), id: e.pointerId };
+    if (!start.touch) { e.preventDefault(); el.setPointerCapture(e.pointerId); el.focus({ preventScroll: true }); }
   });
   el.addEventListener('pointermove', (e) => {
-    if (!start) return;
-    const dx = e.clientX - start.x;
-    if (!start.moved && Math.abs(dx) < 3) return;
-    start.moved = true;
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!start.moved) {
+      // a finger moving up or down is scrolling the panel; only a clearly sideways drag changes the value
+      if (start.touch && Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { start = null; return; }
+      if (Math.abs(dx) < (start.touch ? 10 : 8) || Math.abs(dx) < Math.abs(dy)) return;
+      start.moved = true;
+      start.x = e.clientX;
+      if (start.touch) el.setPointerCapture(e.pointerId);
+      el.classList.add('focus');
+      return;
+    }
     const k = e.shiftKey ? 0.1 : 1;
-    let v = start.v + (dx / 4) * (step / scale) * k;
+    let v = start.v + ((e.clientX - start.x) / 4) * (step / scale) * k;
     if (e.ctrlKey) v = Math.round(v / (step / scale * 10)) * (step / scale * 10);
-    apply(v);
+    apply(v, false);
   });
-  const up = () => {
-    if (!start) return;
-    const moved = start.moved;
+  el.addEventListener('pointerup', (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const s = start;
     start = null;
     el.classList.remove('focus');
-    if (moved) pushUndo(); else edit();
-  };
-  el.addEventListener('pointerup', up);
+    if (s.moved) pushUndo();
+    else if (!s.touch || (Math.hypot(e.clientX - s.x, e.clientY - s.y) < 10 && performance.now() - s.t < 700)) edit('');
+  });
   el.addEventListener('pointercancel', () => { start = null; el.classList.remove('focus'); });
-  function edit() {
+  function edit(initial) {
+    if (el.querySelector('input')) return;
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.inputMode = 'decimal';
-    inp.value = (get() * scale).toFixed(digits);
+    inp.enterKeyHint = 'done';
+    inp.value = initial || num(get());
     el.appendChild(inp);
     inp.focus();
-    inp.select();
+    if (initial) inp.setSelectionRange(inp.value.length, inp.value.length); else inp.select();
     let done = false;
     const finish = (ok) => {
       if (done) return;
       done = true;
       if (ok) {
-        const n = parseFloat(inp.value.replace(/[^0-9.+\-eE]/g, ''));
-        if (Number.isFinite(n)) { apply(n / scale); pushUndo(); }
+        const n = parseFloat(inp.value.replace(/,/g, '.').replace(/[^0-9.+\-eE]/g, ''));
+        if (Number.isFinite(n) && Math.abs(n / scale - get()) > 1e-12) { apply(n / scale, true); pushUndo(); }
       }
       inp.remove();
       render();
     };
     inp.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') { finish(true); el.focus(); }
-      else if (e.key === 'Escape') { finish(false); el.focus(); }
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); el.focus({ preventScroll: true }); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); el.focus({ preventScroll: true }); }
+      else if (e.key === 'Tab') {
+        // like Blender: Tab commits and goes on typing in the next field
+        e.preventDefault();
+        finish(true);
+        const all = [...$('props').querySelectorAll('.nf')];
+        const next = all[all.indexOf(el) + (e.shiftKey ? -1 : 1)];
+        if (next) { next.focus({ preventScroll: true }); numberFields.get(next).edit(''); } else el.focus({ preventScroll: true });
+      }
     });
     inp.addEventListener('blur', () => finish(true));
   }
   el.addEventListener('keydown', (e) => {
-    if (el.querySelector('input')) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); edit(); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); apply(get() + (step / scale) * (e.shiftKey ? 10 : 1)); pushUndo(); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); apply(get() - (step / scale) * (e.shiftKey ? 10 : 1)); pushUndo(); }
+    if (el.querySelector('input') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); edit(''); }
+    else if (/^[0-9.\-]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); edit(e.key); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); apply(get() + (step / scale) * (e.shiftKey ? 10 : 1), false); pushUndo(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); apply(get() - (step / scale) * (e.shiftKey ? 10 : 1), false); pushUndo(); }
   });
   render();
   el.refresh = render;
+  numberFields.set(el, { edit });
   return el;
 }
-function row(labelText, control) {
+function row(labelText, control, small) {
   const r = document.createElement('div');
   r.className = 'prow';
   const l = document.createElement('span');
   l.className = 'lbl';
   l.textContent = labelText;
+  if (small) { const s = document.createElement('small'); s.textContent = small; l.appendChild(s); }
   r.append(l, control);
   return r;
 }
@@ -4740,7 +5321,7 @@ function segmented(options, get, set, label) {
     b.setAttribute('role', 'radio');
     b.textContent = text;
     b.setAttribute('aria-checked', String(get() === k));
-    b.addEventListener('click', () => { set(k); pushUndo(); refreshPanels(); });
+    b.addEventListener('click', () => { if (get() === k) return; set(k); pushUndo(); refreshPanels(); });
     d.appendChild(b);
   }
   return d;
@@ -4757,55 +5338,95 @@ function toggle(get, set, label) {
   return b;
 }
 const CM = { unit: 'cm', scale: 100, digits: 1, step: 0.5 };
-const liveFields = [];
+const AXIS_WORDS = ['左右', '前後', '高さ'];
+// position in the editor's axes (X right, Y away, Z up)
 function posFields(it) {
-  return trio([0, 1, 2].map((i) => numberField({ ...CM, unit: '', axis: 'xyz'[i], label: `位置 ${'XYZ'[i]}（cm）`, get: () => it.pos[i], set: (v) => { it.pos[i] = clamp(v, -3, 3); sceneChanged(false); } })));
+  return trio([0, 1, 2].map((i) => numberField({
+    ...CM, unit: '', axis: 'xyz'[i], label: `位置 ${'XYZ'[i]}（${AXIS_WORDS[i]}, cm）`,
+    get: () => toUI(it.pos)[i],
+    set: (v) => { const u = toUI(it.pos); u[i] = v; it.pos = clampItemPos(it, fromUI(u)); sceneChanged(false); },
+    min: () => uiPosLimit(it, i)[0], max: () => uiPosLimit(it, i)[1],
+  })));
+}
+function uiPosLimit(it, i) {
+  const L = posLimits(it);
+  if (i === 0) return L[0];
+  if (i === 1) return [-L[2][1], -L[2][0]];
+  return L[1];
 }
 function rotFields(it) {
-  return trio([0, 1, 2].map((i) => numberField({ unit: '', digits: 0, step: 1, axis: 'xyz'[i], label: `回転 ${'XYZ'[i]}（度）`, get: () => it.rot[i], set: (v) => { it.rot[i] = ((v % 360) + 540) % 360 - 180; sceneChanged(false); } })));
+  return trio([0, 1, 2].map((i) => numberField({
+    unit: '', digits: 0, step: 1, axis: 'xyz'[i], label: `回転 ${'XYZ'[i]}（度）`,
+    get: () => uiEuler(it.rot)[i],
+    set: (v) => { const u = uiEuler(it.rot); u[i] = ((v % 360) + 540) % 360 - 180; it.rot = worldEuler(u).map((x) => Math.round(x * 100) / 100); sceneChanged(false); },
+  })));
 }
+function axisNote() { return noteEl('X 左右（＋が右）・Y 前後（＋が奥）・Z 高さ'); }
 
 // ---------- property panel ----------
+function headerActions(list) {
+  const host = $('props-acts');
+  host.innerHTML = '';
+  for (const [label, fn, cls, icon] of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    if (cls) b.className = cls;
+    b.innerHTML = icon || '';
+    b.append(label);
+    b.addEventListener('click', fn);
+    host.appendChild(b);
+  }
+}
+const ICON_DUP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>';
+const ICON_DEL = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11"/></svg>';
+function nameRow(it) {
+  const name = document.createElement('input');
+  name.className = 'txt'; name.value = it.name; name.setAttribute('aria-label', '名前');
+  name.addEventListener('change', () => { it.name = name.value.trim() || it.name; pushUndo(); refreshPanels(); });
+  name.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') name.blur(); });
+  return row('名前', name);
+}
 function buildProps() {
   const host = $('props');
   host.innerHTML = '';
-  liveFields.length = 0;
   const title = $('props-title');
   if (selectedId === 'tank') {
-    title.textContent = 'プロパティ：水槽';
+    title.textContent = '水槽';
+    headerActions([]);
     const t = scene.tank;
-    const tankField = (k, lbl, lo, hi) => numberField({ ...CM, label: lbl, get: () => t[k], set: (v) => { t[k] = clamp(v, lo, hi); tankEdited(); }, min: lo, max: hi });
+    const tankField = (k, lbl, lo, hi) => numberField({ ...CM, label: lbl, get: () => t[k], set: (v) => { t[k] = v; tankEdited(); }, min: lo, max: hi });
     host.append(
-      group('大きさ', row('幅', tankField('w', '幅', 0.2, 1.2)), row('高さ', tankField('h', '高さ', 0.1, 0.6)), row('奥行き', tankField('d', '奥行き', 0.15, 1.0))),
-      group('計算の細かさ', segmented(Object.entries(QUALITY).map(([k, q]) => [k, q.label]), () => settings.quality, (k) => { settings.quality = k; rebuildSim(true); }, '計算の細かさ')),
-      group(null, noteEl(`格子 ${sim.nx} × ${sim.ny} × ${sim.nz}（1 マス ${(sim.h * 1000).toFixed(1)} mm）・粒子の上限 ${sim.cap.toLocaleString('ja-JP')}`)),
-      actions([['水をすべて消す', () => { sim.clearWater(); toast('水を消しました'); }, 'danger'], ['最初の状態に戻す', resetSim]]),
+      group('大きさ', row('幅', tankField('w', '幅', 0.2, 1.2), 'X'), row('奥行き', tankField('d', '奥行き', 0.15, 1.0), 'Y'), row('高さ', tankField('h', '高さ', 0.1, 0.6), 'Z')),
+      group('計算の細かさ', segmented(Object.entries(QUALITY).map(([k, q]) => [k, q.label]), () => settings.quality, setQuality, '計算の細かさ'),
+        noteEl('細かいほど細い水流や小さなしぶきまで表せますが、動きは重くなります。')),
+      noteEl('大きさや計算の細かさを変えると、水は最初の状態から計算し直します。'),
+      actions([['水を最初の状態に戻す', () => resetSim()], ['水をすべて消す', clearAllWater, 'danger', true]]),
+      details('計算の詳細', `格子 ${sim.nx} × ${sim.ny} × ${sim.nz}（1 マス ${(sim.h * 1000).toFixed(1)} mm）<br>水の粒の上限 ${sim.cap.toLocaleString('ja-JP')} 個（${(sim.cap * sim.vp * 1000).toFixed(1)} L 分）`),
     );
     return;
   }
   const it = selected();
   if (!it) {
-    title.textContent = 'プロパティ';
+    title.textContent = '設定';
+    headerActions([]);
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = '3D ビューかシーン一覧で項目を選ぶと、ここで位置や大きさ、水の量と勢いを変えられます。';
+    p.textContent = isCoarse
+      ? '3D の画面か「一覧」で物や水源をタップすると、ここで位置や大きさ、水の量と勢いを変えられます。'
+      : '3D の画面かシーン一覧で物や水源をクリックすると、ここで位置や大きさ、水の量と勢いを変えられます。';
     host.appendChild(p);
     return;
   }
-  title.textContent = 'プロパティ：' + it.name;
-  const name = document.createElement('input');
-  name.className = 'txt'; name.value = it.name; name.setAttribute('aria-label', '名前');
-  name.addEventListener('change', () => { it.name = name.value.trim() || it.name; pushUndo(); refreshPanels(); });
-  name.addEventListener('keydown', (e) => e.stopPropagation());
-  host.appendChild(row('名前', name));
+  title.textContent = it.name;
+  headerActions([['複製', () => duplicateSelected(false), null, ICON_DUP], ['削除', deleteSelected, 'danger', ICON_DEL]]);
 
   if (it.kind === 'obstacle') {
-    host.appendChild(group('配置', row('位置 cm', posFields(it)), row('回転 °', rotFields(it))));
+    host.appendChild(group('配置', row('位置', posFields(it), 'cm'), axisNote(), SHAPES[it.shape] && it.shape !== 'sphere' ? row('回転', rotFields(it), '度') : null, actions([['床に置く', () => { it.pos[1] += -obstacleBottom(it) + 0.0005; pushUndo(); sceneChanged(false); refreshPanels(); }]])));
     const dimsRows = Object.keys(it.dims).map((k) => {
       const lim = DIM_LIMITS[k] || [0.004, 1];
-      return row(DIM_LABELS[k] || k, numberField({ ...CM, step: k === 't' ? 0.1 : 0.5, label: DIM_LABELS[k], get: () => it.dims[k], set: (v) => { it.dims[k] = v; sceneChanged(false); }, min: lim[0], max: lim[1] }));
+      return row(DIM_LABELS[k] || k, numberField({ ...CM, step: k === 't' ? 0.1 : 0.5, label: DIM_LABELS[k], get: () => it.dims[k], set: (v) => { keepOnFloor(it, () => { it.dims[k] = v; }); sceneChanged(false); }, min: lim[0], max: lim[1] }));
     });
-    host.appendChild(group(`形：${SHAPES[it.shape].label}`, ...dimsRows));
+    host.appendChild(group(`大きさ（${SHAPES[it.shape].label}）`, ...dimsRows));
     const sw = document.createElement('div');
     sw.className = 'swatches';
     sw.setAttribute('role', 'radiogroup'); sw.setAttribute('aria-label', '色');
@@ -4817,79 +5438,157 @@ function buildProps() {
       sw.appendChild(b);
     }
     host.appendChild(group('見た目', row('素材', segmented(Object.entries(MATERIALS).map(([k, m]) => [k, m.label]), () => it.material, (k) => { it.material = k; }, '素材')), row('色', sw)));
-    host.appendChild(actions([['床に置く', () => { it.pos[1] += -obstacleBottom(it) + 0.0005; pushUndo(); sceneChanged(false); refreshPanels(); }], ['複製', () => duplicateSelected(false)], ['削除', deleteSelected, 'danger']]));
+    host.appendChild(nameRow(it));
   } else if (it.kind === 'source') {
     host.appendChild(group(null, toggle(() => it.enabled, (v) => { it.enabled = v; }, '水を出す')));
-    host.appendChild(group('出し方', segmented(Object.entries(SOURCE_MODES).map(([k, m]) => [k, m.label]), () => it.mode, (k) => { it.mode = k; if (k === 'rain' && it.pitch > -80) it.pitch = -90; }, '出し方')));
-    const aim = document.createElement('div');
-    aim.className = 'duo';
-    aim.append(
-      numberField({ unit: '°', digits: 0, step: 1, prefix: '上下', label: '上下の角度（-90 で真下）', get: () => it.pitch, set: (v) => { it.pitch = clamp(v, -90, 90); }, min: -90, max: 90 }),
-      numberField({ unit: '°', digits: 0, step: 1, prefix: '方位', label: '水平の向き', get: () => it.yaw, set: (v) => { it.yaw = ((v % 360) + 360) % 360; } }),
-    );
-    host.appendChild(group('配置', row('位置 cm', posFields(it)), it.mode === 'rain' ? null : row('向き', aim)));
+    host.appendChild(group('出し方', segmented(Object.entries(SOURCE_MODES).map(([k, m]) => [k, m.label]), () => it.mode, (k) => setSourceMode(it, k), '出し方')));
     const amount = [];
     const F = (lbl, key, o) => row(lbl, numberField({ label: lbl, get: () => it[key], set: (v) => { it[key] = v; liveRefresh(); }, ...o }));
     if (it.mode === 'stream' || it.mode === 'shower') {
-      amount.push(F('水量', 'flow', { unit: 'L/分', digits: 2, step: 0.05, min: 0.05, max: 40, fill: [0, 10] }));
+      amount.push(F('流量', 'flow', { unit: 'L/分', digits: 2, step: 0.05, min: 0.05, max: 40, fill: [0, 10] }));
       amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0.05, max: 12, fill: [0, 4] }));
-      if (it.mode === 'shower') amount.push(F('広がり', 'spread', { unit: '°', digits: 0, step: 1, min: 0, max: 80 }));
-      const n = noteEl('');
-      n.dataset.live = 'nozzle';
-      amount.push(n);
+      if (it.mode === 'stream') {
+        // the outlet diameter follows from flow and speed; setting it keeps the speed and changes the flow
+        amount.push(row('出口の太さ', numberField({ unit: 'mm', scale: 1000, digits: 1, step: 0.1, label: '出口の太さ', get: () => sourceNozzle(it), set: (d) => { it.flow = clamp((Math.PI * d * d / 4) * Math.max(it.speed, 0.05) * 60000, 0.05, 40); liveRefresh(); }, min: 0.001, max: 0.12 })));
+        const n = noteEl('');
+        n.dataset.live = 'nozzle';
+        amount.push(n);
+      } else amount.push(F('広がり', 'spread', { unit: '°', digits: 0, step: 1, min: 0, max: 80 }));
     } else if (it.mode === 'drops') {
       amount.push(F('粒の直径', 'dropD', { unit: 'mm', digits: 1, step: 0.1, min: 1, max: 40, fill: [1, 15] }));
-      amount.push(F('間隔', 'dropRate', { unit: '粒/秒', digits: 1, step: 0.1, min: 0.05, max: 60 }));
-      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, fill: [0, 4] }));
+      amount.push(row('間隔', numberField({ unit: '秒', digits: 2, step: 0.01, label: '落ちる間隔', get: () => 1 / it.dropRate, set: (v) => { it.dropRate = 1 / v; }, min: 1 / 60, max: 20 })));
+      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, fill: [0, 4], zeroText: '0（自然に落ちる）' }));
+      const n = noteEl('');
+      n.dataset.live = 'drop';
+      amount.push(n);
     } else if (it.mode === 'burst') {
-      amount.push(F('一度の量', 'burst', { unit: 'L', digits: 2, step: 0.01, min: 0.01, max: 50, fill: [0, 2] }));
+      amount.push(F('一度に出す量', 'burst', { unit: 'L', digits: 2, step: 0.01, min: 0.01, max: 50, fill: [0, 2] }));
       amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, fill: [0, 4] }));
-      amount.push(F('繰り返し', 'burstEvery', { unit: '秒ごと', digits: 1, step: 0.1, min: 0, max: 60 }));
+      amount.push(F('繰り返し', 'burstEvery', { unit: '秒ごと', digits: 1, step: 0.1, min: 0, max: 60, zeroText: '1回だけ' }));
+      amount.push(actions([['今すぐ出す', () => { fireBurst(it); toast(`「${it.name}」から ${it.burst.toFixed(2)} L 出しました`, 1600); }, 'primary']]));
     } else if (it.mode === 'rain') {
-      amount.push(F('雨量', 'rainRate', { unit: 'mm/時', digits: 0, step: 1, min: 1, max: 500, fill: [0, 200] }));
-      amount.push(row('範囲', numberField({ ...CM, label: '範囲', get: () => it.rainSize, set: (v) => { it.rainSize = v; }, min: 0.05, max: 2 })));
+      amount.push(F('雨の強さ', 'rainRate', { unit: 'mm/時', digits: 0, step: 1, min: 1, max: 500, fill: [0, 200] }));
+      amount.push(row('降る範囲', numberField({ ...CM, label: '降る範囲（一辺）', get: () => it.rainSize, set: (v) => { it.rainSize = v; sceneChanged(false); }, min: 0.05, max: 2 })));
     }
     if (it.mode !== 'burst') amount.push(F('総量', 'total', { unit: 'L', digits: 2, step: 0.05, min: 0, max: 100, zeroText: '無制限' }));
     const n2 = noteEl('');
     n2.dataset.live = 'emitted';
     amount.push(n2);
     host.appendChild(group('水の量と勢い', ...amount));
-    host.appendChild(actions([['複製', () => duplicateSelected(false)], ['削除', deleteSelected, 'danger']]));
+    if (it.mode !== 'rain') {
+      const aim = document.createElement('div');
+      aim.className = 'duo';
+      aim.append(
+        numberField({ unit: '°', digits: 0, step: 1, prefix: '上下', label: '上下の角度', get: () => it.pitch, set: (v) => { it.pitch = v; sceneChanged(false); }, min: -90, max: 90 }),
+        numberField({ unit: '°', digits: 0, step: 1, prefix: '方位', label: '方位', get: () => sourceHeading(it), set: (v) => { setSourceHeading(it, v); sceneChanged(false); } }),
+      );
+      host.appendChild(group('水の向き', aim, noteEl('上下：−90° で真下、0° で水平、90° で真上。方位：0° で奥（＋Y）、90° で右（＋X）'), actions([['真下', () => { it.pitch = -90; pushUndo(); refreshPanels(); }], ['水平', () => { it.pitch = 0; pushUndo(); refreshPanels(); }], ['真上', () => { it.pitch = 90; pushUndo(); refreshPanels(); }]])));
+    }
+    host.appendChild(group('配置', row('位置', posFields(it), 'cm'), axisNote()));
+    host.appendChild(nameRow(it));
   } else if (it.kind === 'block') {
-    host.appendChild(group('配置', row('位置 cm', posFields(it))));
-    host.appendChild(group('大きさ', ...['w', 'h', 'd'].map((k) => row(DIM_LABELS[k], numberField({ ...CM, label: DIM_LABELS[k], get: () => it.dims[k], set: (v) => { it.dims[k] = v; sceneChanged(false); }, min: 0.01, max: 1.2 })))));
-    host.appendChild(group(null, noteEl(`約 <b>${(it.dims.w * it.dims.h * it.dims.d * 1000).toFixed(2)} L</b>`)));
-    host.appendChild(actions([['この形で水を入れ直す', resetSim], ['複製', () => duplicateSelected(false)], ['削除', deleteSelected, 'danger']]));
+    host.appendChild(group(null, noteEl('追加したときと、水を最初の状態に戻したとき（下の |◀）に、この枠の形に水が入ります。')));
+    host.appendChild(group('大きさ', ...[['w', 'X'], ['d', 'Y'], ['h', 'Z']].map(([k, ax]) => row(DIM_LABELS[k], numberField({ ...CM, label: DIM_LABELS[k], get: () => it.dims[k], set: (v) => { const onFloor = Math.abs(it.pos[1] - it.dims.h / 2) < 0.002; it.dims[k] = v; if (k === 'h' && onFloor) it.pos[1] = v / 2 + 0.001; it.pos = clampItemPos(it, it.pos); sceneChanged(false); }, min: 0.01, max: 1.2 }), ax))));
+    const vol = noteEl('');
+    vol.dataset.live = 'block';
+    host.appendChild(group(null, vol, actions([['いま水を入れる', () => pourBlock(it), 'primary']]), noteEl('すでに水がある所には入れません。')));
+    host.appendChild(group('配置', row('位置', posFields(it), 'cm'), axisNote()));
+    host.appendChild(nameRow(it));
   } else if (it.kind === 'drain') {
-    host.appendChild(group('配置', row('位置 cm', posFields(it)), row('回転 °', rotFields(it))));
-    host.appendChild(group('大きさ', row('半径', numberField({ ...CM, step: 0.1, label: '半径', get: () => it.r, set: (v) => { it.r = v; sceneChanged(false); }, min: 0.005, max: 0.2 }))));
-    host.appendChild(actions([['複製', () => duplicateSelected(false)], ['削除', deleteSelected, 'danger']]));
+    host.appendChild(group(null, noteEl('触れた水を吸い込んで消します。')));
+    host.appendChild(group('大きさ', row('半径', numberField({ ...CM, step: 0.1, label: '半径', get: () => it.r, set: (v) => { it.r = v; sceneChanged(false); }, min: DRAIN_LIMITS[0], max: DRAIN_LIMITS[1] }))));
+    host.appendChild(group('配置', row('位置', posFields(it), 'cm'), axisNote(), row('回転', rotFields(it), '度')));
+    host.appendChild(nameRow(it));
   }
   liveRefresh();
 }
 function noteEl(html) { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = html; return p; }
+function details(summary, html) {
+  const d = document.createElement('details');
+  d.className = 'more';
+  d.innerHTML = '<summary></summary><p class="note"></p>';
+  d.querySelector('summary').textContent = summary;
+  d.querySelector('p').innerHTML = html;
+  return d;
+}
+// buttons; `confirm` asks for a second press before doing something that cannot be undone
 function actions(list) {
   const d = document.createElement('div');
   d.className = 'actions';
-  for (const [label, fn, cls] of list) {
+  for (const [label, fn, cls, confirm] of list) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'btn' + (cls ? ' ' + cls : ''); b.textContent = label;
-    b.addEventListener('click', fn);
+    let armed = 0;
+    b.addEventListener('click', () => {
+      if (confirm && !armed) {
+        b.classList.add('armed'); b.textContent = 'もう一度押すと実行します';
+        armed = setTimeout(() => { armed = 0; b.classList.remove('armed'); b.textContent = label; }, 3500);
+        return;
+      }
+      if (armed) { clearTimeout(armed); armed = 0; b.classList.remove('armed'); b.textContent = label; }
+      fn();
+    });
     d.appendChild(b);
   }
   return d;
 }
-// update numbers shown in the panel without rebuilding it (during drags)
+// applies a change of size; an obstacle that stood on the floor keeps standing on it
+function keepOnFloor(it, change) {
+  if (it.kind !== 'obstacle') { change(); return; }
+  const b0 = obstacleBottom(it);
+  change();
+  if (Math.abs(b0) < 0.004) it.pos[1] += b0 - obstacleBottom(it);
+}
+function setSourceMode(it, k) {
+  const was = it.mode;
+  it.mode = k;
+  if (k === 'rain' && it.pitch > -80) it.pitch = -90;
+  // drops fall by themselves; streams need some speed to leave the outlet
+  if (k === 'drops' && was !== 'drops') it.speed = 0;
+  if ((k === 'stream' || k === 'shower') && it.speed < 0.05) it.speed = 0.6;
+  if (k === 'burst' && sim) { const st = sim.emitAcc.get(it.id); if (st) st.fired = true; }
+}
+// releases one burst right away, also while paused; a repeating source counts its interval from here
+function fireBurst(it) {
+  let st = sim.emitAcc.get(it.id);
+  if (!st) { st = { acc: 0, liters: 0, timer: 0, fired: false }; sim.emitAcc.set(it.id, st); }
+  sim.setObjects(scene.items, 0);
+  const e = burstEmit(sim, it);
+  sim.emitNow([e]);
+  st.liters += e.count * sim.vp * 1000;
+  st.fired = true;
+  st.timer = it.burstEvery > 0 ? it.burstEvery : 0;
+}
+function clearAllWater() { sim.clearWater(); toast('水槽の水をすべて消しました', 1800); }
+function setQuality(k) {
+  if (settings.quality === k) return;
+  settings.quality = k;
+  rebuildSim(true);
+  toast(`計算の細かさを「${QUALITY[k].label}」にしました。水は最初の状態から計算し直します`, 3200);
+}
+function litersText(L) { return L < 1 ? `${(L * 1000).toFixed(L < 0.01 ? 1 : 0)} mL` : `${L.toFixed(2)} L`; }
+// numbers shown in the panel that change without rebuilding it (during drags and while water flows)
 function liveRefresh() {
   for (const el of $('props').querySelectorAll('.nf')) if (el.refresh && !el.querySelector('input') && !el.classList.contains('focus')) el.refresh();
   const it = selected();
-  if (!it || it.kind !== 'source') return;
+  if (!it) return;
+  if (it.kind === 'block') {
+    const v = $('props').querySelector('[data-live="block"]');
+    if (v) v.innerHTML = `水槽に入る量 約 <b>${blockLiters(it).toFixed(2)} L</b>`;
+    return;
+  }
+  if (it.kind !== 'source') return;
+  const minD = sim ? sim.h * 0.5 : 0.004;
   const nz = $('props').querySelector('[data-live="nozzle"]');
-  if (nz) nz.innerHTML = it.mode === 'shower' ? `吹き出し口の直径 <b>${Math.max(sourceNozzle(it) * 1000, 44).toFixed(0)} mm</b>` : `出口の太さ <b>${(sourceNozzle(it) * 1000).toFixed(1)} mm</b>（水量 ÷ 勢い）`;
+  if (nz) nz.innerHTML = sourceNozzle(it) < minD
+    ? `いまの計算の細かさでは、約 ${(minD * 1000).toFixed(0)} mm より細い水流は粒の列になります（表示メニューの「計算の細かさ」を上げると細くできます）。`
+    : '流量と勢いから決まります。太さを変えると、勢いはそのままで流量が変わります。';
+  const dr = $('props').querySelector('[data-live="drop"]');
+  if (dr) dr.innerHTML = `1 秒に ${it.dropRate.toFixed(it.dropRate < 10 ? 1 : 0)} 粒`;
   const em = $('props').querySelector('[data-live="emitted"]');
   if (em && sim) {
     const st = sim.emitAcc.get(it.id);
-    em.innerHTML = `これまでに出した量 <b>${(st ? st.liters : 0).toFixed(2)} L</b>`;
+    em.innerHTML = `これまでに出した量 <b>${litersText(st ? st.liters : 0)}</b>`;
   }
 }
 
@@ -4897,6 +5596,7 @@ function liveRefresh() {
 function buildOutliner() {
   const ul = $('outliner');
   ul.innerHTML = '';
+  let selBtn = null;
   const entry = (id, icon, name, cls, extra) => {
     const li = document.createElement('li');
     const b = document.createElement('button');
@@ -4906,20 +5606,27 @@ function buildOutliner() {
     b.setAttribute('aria-selected', String(selectedId === id));
     b.innerHTML = icon + '<span class="nm"></span>' + (extra ? `<span class="off">${extra}</span>` : '');
     b.querySelector('.nm').textContent = name;
-    b.addEventListener('click', () => select(id));
+    b.addEventListener('click', () => { select(id); if (narrowMQ.matches) setSheetTab('props'); });
     b.addEventListener('dblclick', () => { select(id); focusSelected(); });
     li.appendChild(b);
     ul.appendChild(li);
+    if (selectedId === id) selBtn = b;
   };
-  entry('tank', ICONS.tank, `水槽（${Math.round(scene.tank.w * 100)}×${Math.round(scene.tank.h * 100)}×${Math.round(scene.tank.d * 100)} cm）`, 'kind-tank');
-  for (const it of scene.items) entry(it.id, ICONS[it.kind], it.name, 'kind-' + it.kind, it.kind === 'source' && !it.enabled ? '停止中' : '');
+  entry('tank', ICONS.tank, `水槽（${Math.round(scene.tank.w * 100)}×${Math.round(scene.tank.d * 100)}×${Math.round(scene.tank.h * 100)} cm）`, 'kind-tank');
+  for (const it of scene.items) entry(it.id, it.kind === 'obstacle' ? SHAPE_ICONS[it.shape] || ICONS.obstacle : ICONS[it.kind], it.name, 'kind-' + it.kind, it.kind === 'source' && !it.enabled ? '停止中' : '');
+  if (selBtn) selBtn.scrollIntoView({ block: 'nearest' });
 }
 
 // ---------- tank edits rebuild the solver ----------
 let tankTimer = 0;
 function tankEdited() {
   clearTimeout(tankTimer);
-  tankTimer = setTimeout(() => { rebuildSim(true); refreshPanels(); }, 350);
+  tankTimer = setTimeout(() => {
+    for (const it of scene.items) it.pos = clampItemPos(it, it.pos);
+    rebuildSim(true);
+    refreshPanels();
+    toast('水槽の大きさを変えたので、水を最初の状態から計算し直しました', 2600);
+  }, 450);
   buildOutliner();
 }
 
@@ -4932,96 +5639,230 @@ function setPlaying(p) {
 }
 $('btn-play').addEventListener('click', () => setPlaying(!settings.playing));
 let stepRequests = 0;
-$('btn-step').addEventListener('click', () => { setPlaying(false); stepRequests++; });
-$('btn-reset').addEventListener('click', resetSim);
+function stepOnce() {
+  if (settings.playing) { setPlaying(false); toast('一時停止してコマ送りします', 1400); }
+  stepRequests++;
+}
+$('btn-step').addEventListener('click', stepOnce);
+$('btn-reset').addEventListener('click', () => resetSim());
 function setSpeed(s) {
   settings.speed = s;
   document.querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.speed === s)));
 }
 document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
+function timeText(t) { return t.toFixed(settings.speed >= 1 ? 2 : settings.speed >= 0.25 ? 3 : 4) + ' s'; }
 
-// tool strip
+// ---------- tool strip ----------
 function setTool(t) {
   editor.tool = t;
   document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.tool === t)));
   updateHint();
 }
-document.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+function toolAvailable(t) {
+  const it = selected();
+  if (t === 'dup' || t === 'del') return !!it;
+  if (!it) return true;
+  if (t === 'rotate') return canRotate(it);
+  if (t === 'scale') return canScale(it);
+  return true;
+}
+function toolUnavailable(t) {
+  const it = selected();
+  if (t === 'dup' || t === 'del') toast(selectedId === 'tank' ? '水槽は複製・削除できません' : '先に物や水源を選んでください', 2000);
+  else toast(toolNote(t, it) || 'いま選んでいる物にはこの道具を使えません', 2200);
+}
+function updateToolButtons() {
+  for (const b of document.querySelectorAll('[data-tool]')) b.setAttribute('aria-disabled', String(!toolAvailable(b.dataset.tool)));
+  $('btn-dup').setAttribute('aria-disabled', String(!toolAvailable('dup')));
+  $('btn-del').setAttribute('aria-disabled', String(!toolAvailable('del')));
+}
+document.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => {
+  setTool(b.dataset.tool);
+  if (!toolAvailable(b.dataset.tool)) toolUnavailable(b.dataset.tool);
+}));
 
-// side drawer on narrow screens
-function setDrawer(open) { $('side').classList.toggle('open', open); $('btn-side').setAttribute('aria-expanded', String(open)); }
-$('btn-side').addEventListener('click', () => setDrawer(!$('side').classList.contains('open')));
-$('btn-side-close').addEventListener('click', () => setDrawer(false));
+// ---------- settings sheet on narrow screens ----------
+const sheet = { auto: false };
+function openSheet(tab) {
+  setSheetTab(tab || $('side').dataset.tab);
+  if (!$('side').classList.contains('open')) sheet.auto = true;
+  $('side').classList.add('open');
+  $('btn-side').setAttribute('aria-expanded', 'true');
+}
+function closeSheet() {
+  $('side').classList.remove('open', 'tall');
+  $('btn-side').setAttribute('aria-expanded', 'false');
+  sheet.auto = false;
+  updateSheetSizeButton();
+}
+function setSheetTab(tab) {
+  $('side').dataset.tab = tab;
+  document.querySelectorAll('.sheet-head [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+}
+function updateSheetSizeButton() {
+  const tall = $('side').classList.contains('tall');
+  const b = $('btn-side-size');
+  b.setAttribute('aria-label', tall ? '縮める' : '広げる');
+  b.title = tall ? '縮める' : '広げる';
+  b.querySelector('path').setAttribute('d', tall ? 'M4 6l4 4 4-4' : 'M4 10l4-4 4 4');
+}
+$('btn-side').addEventListener('click', () => { if ($('side').classList.contains('open')) closeSheet(); else { openSheet(); sheet.auto = false; } });
+$('btn-side-close').addEventListener('click', closeSheet);
+$('btn-side-size').addEventListener('click', () => { $('side').classList.toggle('tall'); sheet.auto = false; updateSheetSizeButton(); });
+document.querySelectorAll('.sheet-head [data-tab]').forEach((b) => b.addEventListener('click', () => setSheetTab(b.dataset.tab)));
 
-// hint line
-const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+// the boundary between the scene list and the settings can be dragged on wide screens
+(() => {
+  const sp = $('split');
+  sp.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    sp.setPointerCapture(e.pointerId);
+    const side = $('side').getBoundingClientRect();
+    const move = (ev) => { const h = clamp(ev.clientY - side.top, 70, side.height - 160); $('side').style.gridTemplateRows = `${h}px 6px minmax(0, 1fr)`; };
+    const up = () => { sp.removeEventListener('pointermove', move); sp.removeEventListener('pointerup', up); sp.removeEventListener('pointercancel', up); };
+    sp.addEventListener('pointermove', move); sp.addEventListener('pointerup', up); sp.addEventListener('pointercancel', up);
+  });
+})();
+
+// ---------- hint line ----------
 function updateHint() {
   const m = editor.modal;
   let h;
   if (m) {
-    const nm = { move: '移動', rotate: '回転', scale: '寸法' }[m.type];
-    h = `${nm}中：<kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> で軸を固定・クリックか <kbd>Enter</kbd> で確定・右クリックか <kbd>Esc</kbd> で取り消し`;
+    const nm = { move: '移動', rotate: '回転', scale: '大きさ' }[m.type];
+    const ax = m.axis >= 0 ? `　<b>${'XYZ'[m.axis]}（${AXIS_WORDS[m.axis]}）に固定</b>` : '';
+    const typed = m.typed ? `　入力：<b>${m.typed}${m.type === 'move' ? ' cm' : m.type === 'rotate' ? '°' : ' 倍'}</b>` : '';
+    h = `${nm}中${ax}${typed}　<kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> で軸を固定（Z が上下）・数字で値を入力・クリックか <kbd>Enter</kbd> で確定・右クリックか <kbd>Esc</kbd> で取り消し`;
+  } else if (selectedId === 'tank') {
+    h = '右の欄で水槽の大きさと計算の細かさを変えられます　空いた所をクリックで選択を解除';
   } else if (selected()) {
-    h = '矢印・輪をドラッグで編集　<kbd>G</kbd> 移動 <kbd>R</kbd> 回転 <kbd>S</kbd> 寸法 <kbd>X</kbd> 削除 <kbd>Shift</kbd>+<kbd>D</kbd> 複製';
+    const it = selected();
+    const note = toolNote(editor.tool, it);
+    let what;
+    if (note) what = note;
+    else if (editor.tool === 'move') what = it.kind === 'block' ? '矢印や中央の丸をドラッグで移動' : '矢印をドラッグでその向きに移動・本体をドラッグで床に沿って移動（<kbd>Shift</kbd> で上下）';
+    else if (editor.tool === 'rotate') what = it.kind === 'source' ? '橙の丸をドラッグで水の向きを変える・本体をドラッグで水平に回す' : '輪をドラッグで回転・本体をドラッグで水平に回す';
+    else what = '四角をドラッグでその向きの大きさ・中央の四角か本体をドラッグで全体の大きさ';
+    h = `${what}　<kbd>G</kbd> 移動 <kbd>R</kbd> 回転 <kbd>S</kbd> 大きさ <kbd>X</kbd> 削除 <kbd>Shift</kbd>+<kbd>D</kbd> 複製`;
+  } else if (editor.panMode) {
+    h = 'ドラッグで平行移動しています（右上の十字のボタンで回転に戻ります）';
   } else {
-    h = '空いた所をドラッグで回転・<kbd>Shift</kbd>+ドラッグで平行移動・ホイールで拡大　<kbd>Shift</kbd>+<kbd>A</kbd> で追加';
+    h = '空いた所をドラッグで視点を回す・<kbd>Shift</kbd>+ドラッグで平行移動・ホイール（トラックパッドは2本指の上下）で拡大　物をクリックで選択　<kbd>Shift</kbd>+<kbd>A</kbd> で追加';
   }
   $('hint').innerHTML = h;
 }
 
-// keyboard (Blender-like)
+// ---------- keyboard (Blender-like) ----------
 let lastPointer = null;
 gpuCanvas.addEventListener('pointermove', (e) => { lastPointer = localXY(e); });
+function clientFromLocal(p) { const r = gpuCanvas.getBoundingClientRect(); return [r.left + p[0], r.top + p[1]]; }
+function confirmDelete() {
+  const it = selected();
+  if (!it) return;
+  const at = lastPointer ? clientFromLocal(lastPointer) : null;
+  closeMenus();
+  const dd = $('dd-add');
+  buildMenu(dd, [{ grp: `「${it.name}」を削除しますか？` }, { label: '削除', act: deleteSelected }]);
+  dd.hidden = false;
+  if (at) { dd.style.position = 'fixed'; dd.style.left = at[0] + 'px'; dd.style.top = at[1] + 'px'; }
+  dd.querySelector('button').focus({ preventScroll: true });
+}
+function modalTyped(k) {
+  const m = editor.modal;
+  let s = m.typed || '';
+  if (k === 'Backspace') s = s.slice(0, -1);
+  else if (k === '-') s = s.startsWith('-') ? s.slice(1) : '-' + s;
+  else if (k === '.' && s.includes('.')) return;
+  else s += k;
+  m.typed = s;
+  applyTyped();
+  updateHint();
+}
+function applyTyped() {
+  const m = editor.modal, it = m.item;
+  const v = parseFloat(m.typed);
+  Object.assign(it, cloneScene(m.start));
+  if (!Number.isFinite(v)) { sceneChanged(false); return; }
+  const ax = m.axis >= 0 ? m.axis : 0;
+  if (m.type === 'move') setPos(it, v3.add(m.start.pos, v3.mul(uiAxisDir(ax), v / 100)));
+  else if (m.type === 'rotate') {
+    if (it.kind === 'source') setAim(it, m3.apply(m3.axisAngle(uiAxisDir(ax), v * DEG), sourceDir(m.start)), false);
+    else setItemRotation(it, m3.mul(m3.axisAngle(uiAxisDir(ax), v * DEG), m.R0));
+  } else if (m.type === 'scale' && v > 0) {
+    const map = scaleMap(it);
+    setDims(it, m.start, m.axis >= 0 ? map[localOfUI(it, m.axis)] : [...map[0], ...map[1], ...map[2]], v);
+    afterScale(it, m.start, v, m.lastX ?? m.cx, m.lastY ?? m.cy);
+  }
+  sceneChanged(false);
+}
+const VIEW_KEYS = { 1: 'front', 3: 'side', 7: 'top' };
 window.addEventListener('keydown', (e) => {
   const tgt = e.target;
   if (tgt instanceof HTMLInputElement || tgt instanceof HTMLTextAreaElement) return;
   const k = e.key;
   if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
-  if (e.ctrlKey || e.metaKey) return;
+  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
+  if ((e.ctrlKey || e.metaKey) && (k === 'o' || k === 'O')) { e.preventDefault(); openFile(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (editor.modal) {
-    if (k === 'Escape') { endModal(false); e.preventDefault(); }
-    else if (k === 'Enter') { endModal(true); e.preventDefault(); }
+    e.preventDefault();
+    if (k === 'Escape') endModal(false);
+    else if (k === 'Enter') endModal(true);
     else if ('xyzXYZ'.includes(k) && k.length === 1) {
       const a = 'xyz'.indexOf(k.toLowerCase());
       editor.modal.axis = editor.modal.axis === a ? -1 : a;
-      if (editor.modal.lastX !== undefined) updateModal(editor.modal.lastX, editor.modal.lastY, e.shiftKey);
-    }
+      if (editor.modal.typed) applyTyped();
+      else if (editor.modal.lastX !== undefined) updateModal(editor.modal.lastX, editor.modal.lastY, e.shiftKey);
+      updateHint();
+    } else if (/^[0-9.\-]$/.test(k) || k === 'Backspace') modalTyped(k);
     return;
   }
-  if (tgt instanceof HTMLButtonElement && (k === ' ' || k === 'Enter')) return;
-  if (k === ' ') { e.preventDefault(); setPlaying(!settings.playing); }
-  else if (k === 'A' && e.shiftKey) { e.preventDefault(); $('m-add').click(); }
+  // Space plays and pauses wherever the focus is (buttons are pressed with Enter)
+  if (k === ' ') { e.preventDefault(); setPlaying(!settings.playing); return; }
+  if (k === 'Escape') { if (!$('welcome').hidden) { $('welcome-ok').click(); return; } closeMenus(); if (selectedId !== null) select(null); return; }
+  // the remaining single keys act on the 3D view; inside the panels and menus they keep their usual meaning
+  if (tgt instanceof Element && tgt.closest('aside, .dropdown')) return;
+  if (k === 'A' && e.shiftKey) { e.preventDefault(); openMenu('m-add', 'dd-add', addMenu, lastPointer ? clientFromLocal(lastPointer) : null); }
   else if ((k === 'D' || k === 'd') && e.shiftKey) { e.preventDefault(); duplicateSelected(true); }
   else if (k === 'g' || k === 'G') { if (lastPointer) startModal('move', lastPointer[0], lastPointer[1]); }
   else if (k === 'r' || k === 'R') { if (lastPointer) startModal('rotate', lastPointer[0], lastPointer[1]); }
   else if (k === 's' || k === 'S') { if (lastPointer) startModal('scale', lastPointer[0], lastPointer[1]); }
-  else if (k === 'x' || k === 'X' || k === 'Delete' || k === 'Backspace') { if (selected()) { e.preventDefault(); deleteSelected(); } }
-  else if (k === 'Escape') { closeMenus(); select(null); }
-  else if (k === 'Home') { animateCamera({ ...frameAll(), ...VIEW_PRESETS.home }); }
-  else if (k === '1') animateCamera({ ...VIEW_PRESETS.front, ...frameAll() });
-  else if (k === '3') animateCamera({ ...VIEW_PRESETS.side, ...frameAll() });
-  else if (k === '7') animateCamera({ ...VIEW_PRESETS.top, ...frameAll() });
+  else if (k === 'x' || k === 'X') { if (selected()) { e.preventDefault(); confirmDelete(); } }
+  else if (k === 'Delete' || k === 'Backspace') { if (selected()) { e.preventDefault(); deleteSelected(); } }
+  else if (k === 'Home') viewHome();
+  else if (VIEW_KEYS[k]) animateCamera({ ...VIEW_PRESETS[VIEW_KEYS[k]], ...frameAll() });
   else if (k === '.') focusSelected();
-  else if (k === 'ArrowRight' && !settings.playing) stepRequests++;
+  else if (k === 'ArrowRight') stepOnce();
+  else if (k === 'ArrowLeft' && e.shiftKey) resetSim();
   else if (k === 'w' || k === 'W') setTool('move');
   else if (k === 'e' || k === 'E') setTool('rotate');
 });
+
+// ---------- first visit ----------
+function showWelcome() {
+  const steps = isCoarse ? [
+    '<b>1本指でなぞる</b>と視点が回り、<b>2本指</b>で拡大・平行移動できます。',
+    '<b>物や水源をタップ</b>すると、下に出る「設定」で水の量や勢い、大きさを変えられます。',
+    '選んだ物の<b>矢印や輪をなぞる</b>と、動かしたり回したりできます。',
+    '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。',
+  ] : [
+    '<b>空いた所をドラッグ</b>すると視点が回ります（Shift+ドラッグで平行移動、ホイールで拡大）。',
+    '<b>物や水源をクリック</b>すると、右の欄で水の量や勢い、大きさを変えられます。',
+    '選んだ物の<b>矢印や輪をドラッグ</b>すると、動かしたり回したりできます。Blender と同じ G・R・S キーも使えます。',
+    '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。',
+  ];
+  $('welcome-steps').innerHTML = steps.map((s) => `<li>${s}</li>`).join('');
+  $('welcome').hidden = false;
+  $('welcome-ok').focus({ preventScroll: true });
+}
+$('welcome-ok').addEventListener('click', () => { $('welcome').hidden = true; store.set('suiri-lab-welcome', '1'); gpuCanvas.focus({ preventScroll: true }); });
 
 // ---- 90-main.js
 // ============================================================
 //  Main loop and start-up
 // ============================================================
 let sim = null;
-FluidSim.prototype.emitNow = function (list) {
-  for (let i = 0; i < list.length; i += MAX_EMIT) {
-    const total = this.writeEmits(list.slice(i, i + MAX_EMIT));
-    if (!total) continue;
-    const enc = device.createCommandEncoder();
-    this.encodeEmit(enc, total);
-    device.queue.submit([enc.finish()]);
-  }
-};
 function rebuildSim(refill) {
   if (sim) sim.destroy();
   sim = new FluidSim(scene.tank, settings.quality);
@@ -5030,11 +5871,12 @@ function rebuildSim(refill) {
   pBGCache.key = null;
   refreshPanels();
 }
-function resetSim() {
+// water and time back to the start: the water blocks are filled again, sources start over
+function resetSim(quiet) {
   sim.clearWater();
   sim.setObjects(scene.items, 0);
   sim.emitNow(blockEmits(sim));
-  toast('最初の状態に戻しました', 1400);
+  if (!quiet) toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 2000);
 }
 
 // ---------- sizing ----------
@@ -5057,24 +5899,22 @@ function doResize() {
 let last = performance.now();
 const perf = { t: 0, frames: 0, shown: 0, acc: 0, n: 0, checked: false, touched: false };
 function updateStats(realDt) {
-  perf.acc += realDt; perf.n++;
   perf.shown += realDt;
-  if (perf.shown < 0.25) return;
-  const fps = perf.n / perf.acc;
-  perf.shown = 0; perf.acc = 0; perf.n = 0;
-  $('t-time').textContent = sim.time.toFixed(2) + ' s';
-  $('t-water').textContent = sim.waterLiters.toFixed(2) + ' L';
+  if (perf.shown < 0.2 && (settings.playing || stepShown === sim.time)) return;
+  perf.shown = 0;
+  stepShown = sim.time;
+  for (const el of document.querySelectorAll('[data-info="time"]')) el.textContent = timeText(sim.time);
+  for (const el of document.querySelectorAll('[data-info="water"]')) el.textContent = sim.waterLiters.toFixed(2) + ' L';
   const ratio = sim.count / sim.cap;
-  const meter = $('t-meter');
-  meter.firstChild.style.width = `${Math.min(ratio, 1) * 100}%`;
-  meter.classList.toggle('full', ratio > 0.9);
-  $('t-fps').textContent = Number.isFinite(fps) ? Math.round(fps) + ' fps' : '--';
+  const cap = document.querySelector('[data-info="cap"]');
+  cap.textContent = ratio >= 0.5 ? `（計算できる量の ${Math.round(Math.min(ratio, 1) * 100)}%）` : '';
+  cap.classList.toggle('full', ratio > 0.9);
   const st = $('status');
-  if (sim.full) { st.hidden = false; st.innerHTML = '<b>水の量が上限です。</b>排水口を置くか、水槽の設定で水を消してください。'; }
-  else if (editor.modal) st.hidden = true;
-  else st.hidden = true;
+  st.hidden = !sim.full;
+  if (sim.full) st.innerHTML = '<b>水の量が計算できる上限です。</b>排水口を置くか、水槽の設定で水を消してください。';
   liveRefresh();
 }
+let stepShown = -1;
 // the solver only advances once the GPU has finished its previous step, so slow devices never build a backlog
 let simBusy = false;
 let frameCount = 0;
@@ -5119,16 +5959,16 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev
   let loaded = false;
   const saved = store.get('suiri-lab-scene');
   if (saved) {
-    try {
-      const o = JSON.parse(saved);
-      if (o && o.v === 1 && o.scene && Array.isArray(o.scene.items) && o.scene.tank) {
-        scene.tank = o.scene.tank;
-        scene.items = o.scene.items;
-        uid = Math.max(1, ...scene.items.map((i) => (i.id | 0) + 1));
-        if (o.cam) Object.assign(cam, o.cam);
-        loaded = true;
-      }
-    } catch (e) { loaded = false; }
+    let o = null;
+    try { o = JSON.parse(saved); } catch (e) { o = null; }
+    const s = validScene(o);
+    if (s) {
+      scene.tank = s.tank;
+      scene.items = s.items;
+      uid = Math.max(1, ...scene.items.map((i) => (i.id | 0) + 1));
+      if (o.cam && Array.isArray(o.cam.target) && [o.cam.dist, o.cam.az, o.cam.el].every(Number.isFinite)) Object.assign(cam, o.cam);
+      loaded = true;
+    }
   }
   if (!loaded) {
     const s = PRESETS[0].make();
@@ -5146,14 +5986,17 @@ for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev
   setPlaying(!window.__pauseAtBoot);
   setSpeed(1);
   setTool('move');
-  updateHint();
+  selectionChanged();
+  updateSheetSizeButton();
+  if (store.get('suiri-lab-welcome') !== '1' && !window.__noWelcome) showWelcome();
   requestAnimationFrame(frame);
 })();
 
 window.suiriLab = {
   scene, settings, cam, editor,
   sim: () => sim,
-  select, loadPreset: (id) => loadPreset(PRESETS.find((p) => p.id === id), true),
+  select, selectedId: () => selectedId, undo, redo,
+  loadPreset: (id) => loadPreset(PRESETS.find((p) => p.id === id), true),
   addItem, resetSim,
   async run(seconds, dt = 1 / 120) {
     setPlaying(false);
@@ -5202,6 +6045,10 @@ window.suiriLab = {
   noRippleMask() { sim.ripple.bg.maskBuild = null; },
   stats: () => ({ frames: frameCount, impacts: sim.impacts, count: sim.count, ww: sim.wwCount, vmax: sim.vmax, time: sim.time, liters: sim.waterLiters, grid: [sim.nx, sim.ny, sim.nz], gpuErrors }),
   noAutoQuality() { perf.checked = true; },
+  // page coordinates of a world point and of the selected item's gizmo handles (for automated checks)
+  screen(p) { const q = project(p); const [x, y] = clientFromLocal([q.x, q.y]); return { x, y, ok: q.ok }; },
+  pick(x, y) { const r = gpuCanvas.getBoundingClientRect(); const it = pickItem(x - r.left, y - r.top); return it === 'tank' ? 'tank' : it ? it.id : null; },
+  handles() { const it = selected(); return it ? gizmoHandles(it).map((h) => { const a = h.b || h.a; const [x, y] = clientFromLocal([a.x, a.y]); return { type: h.type, i: h.i, ci: h.ci, x, y }; }) : []; },
   async idle() { await device.queue.onSubmittedWorkDone(); },
   setPlaying,
 };

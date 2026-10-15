@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
 <style>
-/* Layout: a 3D editor shell — header across the top, tool strip at left, viewport centre, scene list + properties at right, transport along the bottom. */
+/* Layout: a 3D editor shell — header across the top, tool strip at left, viewport centre, scene list + properties at right, transport along the bottom.
+   On narrow screens the tools become a row under the header and the panel becomes a sheet between the viewport and the transport. */
 :root {
   --bg: #16191c;
   --panel: #23272b;
@@ -17,21 +18,23 @@
   --line: #3a4046;
   --line-soft: #30353a;
   --text: #e4e8ea;
-  --muted: #98a2a8;
+  --muted: #a3acb2;
   --accent: #f2a43a;
   --accent-ink: #20160a;
   --water: #5fb4e6;
   --danger: #e2645a;
+  --ctl: 30px;
   --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
+@media (pointer: coarse) { :root { --ctl: 44px; } }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0; overflow: hidden;
   background: var(--bg); color: var(--text);
-  font: 13px/1.4 var(--font-body);
+  font: 13.5px/1.45 var(--font-body);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -39,8 +42,8 @@ button { font: inherit; color: inherit; }
 .app {
   height: 100%;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 300px;
-  grid-template-rows: 42px minmax(0, 1fr) 46px;
+  grid-template-columns: 62px minmax(0, 1fr) 320px;
+  grid-template-rows: 44px minmax(0, 1fr) 50px;
   grid-template-areas: "head head head" "tools view side" "time time time";
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
@@ -48,42 +51,46 @@ button { font: inherit; color: inherit; }
 header.head {
   grid-area: head;
   display: flex; align-items: center; gap: 4px;
-  padding-inline: max(10px, env(safe-area-inset-left, 0px)) max(10px, env(safe-area-inset-right, 0px));
+  padding-inline: 10px;
   background: var(--panel); border-bottom: 1px solid var(--line);
   min-width: 0;
 }
-.brand { font-weight: 600; letter-spacing: 0.08em; margin-right: 12px; white-space: nowrap; }
+.brand { font-weight: 600; letter-spacing: 0.08em; margin-right: 10px; white-space: nowrap; }
 .brand b { color: var(--water); font-weight: 600; }
 .spacer { flex: 1; }
 .menu { position: relative; }
 .mbtn, .ibtn {
-  height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
+  height: var(--ctl); min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
   background: transparent; cursor: pointer; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .mbtn:hover, .ibtn:hover, .mbtn[aria-expanded="true"] { background: var(--panel-2); }
-.ibtn { width: 30px; padding: 0; justify-content: center; }
+.ibtn { width: var(--ctl); padding: 0; justify-content: center; }
 .ibtn svg, .mbtn svg { width: 16px; height: 16px; flex: none; }
-.ibtn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+.ibtn:disabled, .mbtn:disabled { opacity: 0.35; cursor: default; background: transparent; }
 .dropdown {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
-  min-width: 210px; padding: 6px;
+  min-width: 230px; max-height: calc(100vh - 70px); overflow-y: auto; padding: 6px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
   display: grid; gap: 1px;
 }
 .dropdown[hidden] { display: none; }
-.dropdown .grp { padding: 6px 8px 3px; font-size: 11px; letter-spacing: 0.1em; color: var(--muted); }
+.dropdown .grp { padding: 6px 8px 3px; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
 .dropdown button {
-  display: flex; align-items: center; gap: 9px; width: 100%;
-  padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--ctl);
+  padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
 }
 .dropdown button:hover, .dropdown button:focus-visible { background: rgba(242,164,58,0.16); outline: none; }
-.dropdown button .k { margin-left: auto; color: var(--muted); font: 11px var(--font-data); }
-.dropdown button svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.dropdown button .k { margin-left: auto; color: var(--muted); font: 11.5px var(--font-data); }
+.dropdown button .sub { display: block; font-size: 11.5px; color: var(--muted); }
+.dropdown button svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .dropdown .sep { height: 1px; background: var(--line); margin: 4px 2px; }
 .dropdown .check::before { content: ""; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; flex: none; }
 .dropdown .check[aria-checked="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--panel-2); }
+.dropdown .radio::before { content: ""; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 50%; flex: none; }
+.dropdown .radio[aria-checked="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--panel-2); }
+@media (pointer: coarse) { .dropdown button .k { display: none; } }
 
 nav.tools {
   grid-area: tools;
@@ -92,150 +99,200 @@ nav.tools {
   background: var(--panel); border-right: 1px solid var(--line);
 }
 .tbtn {
-  width: 36px; height: 36px; border: 0; border-radius: 7px;
-  background: transparent; cursor: pointer; display: grid; place-items: center;
+  width: 52px; height: 50px; border: 0; border-radius: 7px; white-space: nowrap;
+  background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: 11px; line-height: 1.1; color: var(--text);
 }
-.tbtn svg { width: 20px; height: 20px; }
+.tbtn svg { width: 20px; height: 20px; flex: none; }
 .tbtn:hover { background: var(--panel-2); }
 .tbtn[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
-nav.tools .sep { width: 24px; height: 1px; background: var(--line); margin: 4px 0; }
+.tbtn[aria-disabled="true"], .tbtn:disabled { opacity: 0.35; cursor: default; }
+.tbtn[aria-disabled="true"]:hover, .tbtn:disabled:hover { background: transparent; }
+.tbtn[aria-checked="true"][aria-disabled="true"] { background: rgba(242,164,58,0.35); }
+nav.tools .sep { width: 30px; height: 1px; background: var(--line); margin: 4px 0; flex: none; }
+.narrow-only { display: none !important; }
 
 .view { grid-area: view; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #0d0f11; }
 .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #gpu { touch-action: none; outline: none; }
 #overlay { pointer-events: none; }
 .view-hint {
-  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 140px);
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 150px);
   padding: 5px 9px; border-radius: 6px;
-  background: rgba(16,19,22,0.72); color: var(--text); font-size: 12px;
+  background: rgba(16,19,22,0.78); color: var(--text); font-size: 12.5px;
   pointer-events: none;
 }
-.view-hint kbd { font: 11px var(--font-data); padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(255,255,255,0.04); }
+.view-hint kbd { font: 11.5px var(--font-data); padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(255,255,255,0.05); }
 .view-status {
-  position: absolute; left: 10px; top: 10px;
-  padding: 4px 8px; border-radius: 6px; background: rgba(16,19,22,0.72);
-  font: 12px var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted);
+  position: absolute; left: 10px; top: 10px; max-width: calc(100% - 140px);
+  padding: 6px 10px; border-radius: 6px; background: rgba(16,19,22,0.85);
+  font-size: 13px; color: var(--text);
   pointer-events: none;
 }
-.view-status b { color: var(--text); font-weight: 500; }
+.view-status b { color: #ffd9a3; font-weight: 600; }
+.view-info { display: none; }
 .navpad {
   position: absolute; right: 10px; top: 10px;
   display: grid; justify-items: center; gap: 6px;
 }
 .navball { width: 84px; height: 84px; border-radius: 50%; background: rgba(16,19,22,0.35); cursor: grab; touch-action: none; }
 .navball:hover { background: rgba(16,19,22,0.55); }
-.navbtns { display: flex; flex-direction: column; gap: 4px; }
+.navbtns { display: flex; flex-direction: column; gap: 5px; }
 .navbtns button {
-  width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: grab; touch-action: none;
-  background: rgba(16,19,22,0.6); display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; touch-action: manipulation;
+  background: rgba(16,19,22,0.7); display: grid; place-items: center;
 }
-.navbtns button:hover { background: rgba(40,46,52,0.9); }
+.navbtns button:hover { background: rgba(40,46,52,0.95); }
+.navbtns button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .navbtns svg { width: 17px; height: 17px; }
 
 aside.side {
   grid-area: side; min-height: 0;
-  display: grid; grid-template-rows: minmax(110px, 34%) minmax(0, 1fr);
+  display: grid; grid-template-rows: minmax(96px, 28%) 6px minmax(0, 1fr);
   background: var(--panel); border-left: 1px solid var(--line);
 }
+.split { cursor: row-resize; touch-action: none; background: var(--line-soft); border-top: 1px solid var(--line); }
+.split:hover { background: var(--line); }
+.sheet-head { display: none; }
 .side-sec { min-height: 0; display: flex; flex-direction: column; }
-.side-sec + .side-sec { border-top: 1px solid var(--line); }
 .sec-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 7px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 36px;
+  padding: 4px 6px 4px 10px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);
   border-bottom: 1px solid var(--line-soft);
 }
-.scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-width: thin; }
+.sec-head .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-head .acts { display: flex; gap: 2px; flex: none; }
+.sec-head .acts button { height: 28px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.sec-head .acts button:hover { border-color: var(--line); }
+.sec-head .acts button.danger { color: #ffb4ae; }
+.sec-head .acts svg { width: 14px; height: 14px; }
+.scroll {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-width: thin;
+  background:
+    linear-gradient(var(--panel) 30%, rgba(35,39,43,0)) top / 100% 24px no-repeat local,
+    linear-gradient(rgba(35,39,43,0), var(--panel) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0,0,0,0.45), rgba(0,0,0,0)) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,0.45), rgba(0,0,0,0)) bottom / 100% 10px no-repeat scroll;
+}
 .outliner { list-style: none; margin: 0; padding: 4px; }
 .outliner li button {
-  width: 100%; display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
+  width: 100%; min-height: var(--ctl); display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
 }
 .outliner li button:hover { background: var(--panel-2); }
 .outliner li button[aria-selected="true"] { background: rgba(242,164,58,0.2); color: #ffd9a3; }
-.outliner svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
-.outliner .kind-source svg, .outliner .kind-block svg, .outliner .kind-rain svg { color: var(--water); }
+.outliner svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.outliner .kind-source svg, .outliner .kind-block svg { color: var(--water); }
 .outliner .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.outliner .off { color: var(--muted); font-size: 11px; }
+.outliner .off { color: var(--muted); font-size: 12px; }
 
-.props { padding: 6px 10px 16px; display: grid; gap: 10px; }
-.props .empty { color: var(--muted); padding: 10px 2px; }
-.pgroup { display: grid; gap: 5px; }
-.pgroup > h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; color: var(--muted); }
-.prow { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 28px; }
-.prow > label, .prow > .lbl { color: var(--muted); font-size: 12px; }
-.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
-.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
-.nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
+.props { padding: 8px 10px 18px; display: grid; gap: 12px; }
+.props .empty { color: var(--muted); padding: 10px 2px; margin: 0; }
+.pgroup { display: grid; gap: 6px; }
+.pgroup > h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.prow { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 8px; min-height: var(--ctl); }
+.prow > .lbl { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
+.prow > .lbl small { display: block; font-size: 11px; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
 .nf {
-  position: relative; height: 26px; border-radius: 5px; background: var(--field); border: 1px solid var(--line-soft);
-  display: flex; align-items: center; cursor: ew-resize; touch-action: none; user-select: none; overflow: hidden; min-width: 0;
+  position: relative; height: var(--ctl); border-radius: 5px; background: var(--field); border: 1px solid var(--line-soft);
+  display: flex; align-items: center; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; overflow: hidden; min-width: 0;
 }
 .nf:hover { border-color: var(--line); }
 .nf:focus-within, .nf.focus { border-color: var(--accent); }
 .nf .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(242,164,58,0.16); pointer-events: none; }
-.nf .ax { position: relative; padding-left: 6px; font: 600 11px var(--font-data); }
-.nf .ax.x { color: #e8625f; } .nf .ax.y { color: #8bd16a; } .nf .ax.z { color: #5c9cf0; }
-.nf .val { position: relative; flex: 1; text-align: right; padding: 0 5px; font: 12px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nf input { position: absolute; inset: 0; width: 100%; border: 0; outline: 0; background: var(--field); color: var(--text); font: 12px var(--font-data); text-align: right; padding: 0 6px; }
-.seg { display: flex; flex-wrap: wrap; gap: 3px; }
+.nf .ax { position: relative; padding-left: 7px; font: 600 12px var(--font-data); }
+.nf .ax.x { color: #ef7471; } .nf .ax.y { color: #93d673; } .nf .ax.z { color: #6fa8f2; }
+.nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
+.nf .val { position: relative; flex: 1; text-align: right; padding: 0 6px; font: 13px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf input { position: absolute; inset: 0; width: 100%; border: 0; outline: 0; background: var(--field); color: var(--text); font: 13px var(--font-data); text-align: right; padding: 0 7px; }
+@media (pointer: coarse) { .nf input { font-size: 16px; } }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .seg button {
-  flex: 1 1 auto; height: 26px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft);
-  background: var(--field); cursor: pointer; white-space: nowrap; font-size: 12px;
+  flex: 1 1 auto; min-height: var(--ctl); padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-soft);
+  background: var(--field); cursor: pointer; white-space: nowrap; font-size: 13px;
 }
 .seg button:hover { border-color: var(--line); }
 .seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
-.swatches button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+@media (pointer: coarse) { .swatches button { width: 34px; height: 34px; } }
 .swatches button[aria-checked="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel); }
-.txt { height: 26px; width: 100%; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); color: var(--text); padding: 0 7px; font: inherit; }
+.txt { height: var(--ctl); width: 100%; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); color: var(--text); padding: 0 8px; font: inherit; }
+@media (pointer: coarse) { .txt { font-size: 16px; } }
 .txt:focus { outline: none; border-color: var(--accent); }
-.toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; background: none; border: 0; padding: 0; height: 26px; }
-.toggle .sw { width: 30px; height: 17px; border-radius: 9px; background: var(--line); position: relative; transition: background 0.15s; }
-.toggle .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.toggle { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; background: none; border: 0; padding: 0; min-height: var(--ctl); }
+.toggle .sw { width: 34px; height: 19px; border-radius: 10px; background: var(--line); position: relative; transition: background 0.15s; flex: none; }
+.toggle .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
 .toggle[aria-checked="true"] .sw { background: var(--water); }
-.toggle[aria-checked="true"] .sw::after { transform: translateX(13px); }
-.note { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.toggle[aria-checked="true"] .sw::after { transform: translateX(15px); }
+.note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 .note b { color: var(--text); font-weight: 500; font-family: var(--font-data); }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+details.more { font-size: 12.5px; color: var(--muted); }
+details.more summary { cursor: pointer; min-height: var(--ctl); display: flex; align-items: center; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn {
-  height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line);
+  min-height: var(--ctl); padding: 0 12px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--panel-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 .btn:hover { border-color: var(--muted); }
+.btn.primary { background: rgba(95,180,230,0.16); border-color: rgba(95,180,230,0.55); }
 .btn.danger { color: #ffb4ae; }
-.btn svg { width: 14px; height: 14px; }
+.btn.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn svg { width: 15px; height: 15px; }
 
 footer.time {
   grid-area: time;
   display: flex; align-items: center; gap: 6px; min-width: 0;
-  padding-inline: max(10px, env(safe-area-inset-left, 0px)) max(10px, env(safe-area-inset-right, 0px));
+  padding-inline: 10px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--panel); border-top: 1px solid var(--line);
-  overflow-x: auto; scrollbar-width: none;
 }
+#btn-reset { margin-right: 6px; }
 .play {
-  height: 32px; min-width: 88px; padding: 0 12px; border-radius: 6px; border: 0;
+  height: 34px; width: 104px; padding: 0 12px; border-radius: 6px; border: 0; flex: none;
   background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .play svg { width: 15px; height: 15px; }
-.speeds { display: flex; gap: 3px; margin-left: 6px; }
-.speeds button { height: 28px; padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font: 12px var(--font-data); white-space: nowrap; }
-.speeds button:first-child { font-family: var(--font-body); }
+.speeds { display: flex; align-items: center; gap: 4px; margin-left: 8px; }
+.speeds .lbl { color: var(--muted); font-size: 12.5px; margin-right: 2px; }
+.speeds button { height: 30px; min-width: 44px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font: 12.5px var(--font-data); white-space: nowrap; }
+.speeds button:first-of-type { font-family: var(--font-body); }
 .speeds button[aria-checked="true"] { background: var(--panel-2); border-color: var(--accent); color: #ffd9a3; }
-.tinfo { margin-left: auto; display: flex; gap: 16px; font: 12px var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
-.tinfo b { color: var(--text); font-weight: 500; }
-.meter { width: 70px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
-.meter i { display: block; height: 100%; width: 0; background: var(--water); }
-.meter.full i { background: var(--danger); }
+.tinfo { margin-left: auto; display: flex; gap: 18px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.tinfo b { color: var(--text); font: 500 13px var(--font-data); font-variant-numeric: tabular-nums; }
+.tinfo .cap { font-size: 12px; }
+.tinfo .cap.full { color: #ffb4ae; }
 
 .toast {
-  position: fixed; left: 50%; top: 52px; transform: translateX(-50%); z-index: 50;
-  padding: 8px 14px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 13px; pointer-events: none;
-  opacity: 0; transition: opacity 0.2s; max-width: calc(100% - 32px); text-align: center;
+  position: fixed; left: 50%; top: 54px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px 8px 14px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45); font-size: 13.5px; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s; max-width: calc(100% - 32px);
 }
 .toast.show { opacity: 1; }
+.toast.show.has-act { pointer-events: auto; }
+.toast .act { min-height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: #ffd9a3; cursor: pointer; white-space: nowrap; flex: none; }
+.toast .act[hidden] { display: none; }
+.welcome {
+  position: absolute; inset: 0; z-index: 15; display: grid; place-items: center; padding: 16px;
+  background: rgba(10,12,14,0.55);
+}
+.welcome[hidden] { display: none; }
+.welcome .card {
+  max-width: 460px; max-height: 100%; overflow-y: auto; padding: 18px 20px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+  display: grid; gap: 10px;
+}
+.welcome h2 { margin: 0; font-size: 17px; }
+.welcome p { margin: 0; color: var(--muted); }
+.welcome ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.welcome li b { color: #ffd9a3; font-weight: 600; }
+.welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .fatal {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -246,29 +303,65 @@ footer.time {
 
 .drawer-btn { display: none; }
 @media (max-width: 820px) {
+  body { font-size: 14px; }
   .app {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 42px 44px minmax(0, 1fr) auto;
-    grid-template-areas: "head" "tools" "view" "time";
+    grid-template-rows: 46px 58px minmax(0, 1fr) auto 56px;
+    grid-template-areas: "head" "tools" "view" "side" "time";
   }
-  nav.tools { flex-direction: row; justify-content: center; padding: 4px 8px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
-  nav.tools .sep { width: 1px; height: 24px; margin: 0 4px; }
+  header.head { padding-inline: 8px; gap: 2px; }
+  .brand { margin-right: 4px; font-size: 13px; letter-spacing: 0.04em; }
+  .wide-only { display: none !important; }
+  .narrow-only { display: flex !important; }
+  .mbtn { padding: 0 8px; }
+  nav.tools { flex-direction: row; justify-content: center; gap: 2px; padding: 3px 6px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 10.5px; white-space: nowrap; }
+  nav.tools .sep { width: 1px; height: 30px; margin: 0 3px; }
   aside.side {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: 62%;
-    border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(0,0,0,0.45);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: min(46vh, 400px, calc(100vh - 380px));
+    height: min(46dvh, 400px, calc(100dvh - 380px));
+    grid-template-rows: auto minmax(0, 1fr);
+    border-left: 0; border-top: 1px solid var(--line);
     padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
   }
+  aside.side.tall { height: min(72vh, 640px, calc(100vh - 250px)); height: min(72dvh, 640px, calc(100dvh - 250px)); }
+  .prow > .lbl { font-size: 13.5px; }
+  .pgroup > h3 { font-size: 13px; }
+  .note, details.more { font-size: 13px; }
+  .nf .val, .nf input { font-size: 14px; }
+  .seg button { font-size: 14px; }
   aside.side:not(.open) { display: none; }
+  .sheet-head { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); }
+  .sheet-head .tabs { display: flex; gap: 4px; flex: 1; }
+  .sheet-head .tabs button { min-height: 40px; padding: 0 14px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .sheet-head .tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text); font-weight: 600; }
+  aside.side[data-tab="props"] .sec-list, aside.side[data-tab="list"] .sec-props { display: none; }
+  aside.side { grid-template-rows: auto minmax(0, 1fr) !important; }
+  .split { display: none; }
+  .sec-list .sec-head { display: none; }
   .drawer-btn { display: inline-flex; }
-  .brand { margin-right: 4px; }
-  .mbtn .lbl-wide { display: none; }
-  footer.time { flex-wrap: wrap; row-gap: 4px; padding-block: 6px; }
-  .tinfo { margin-left: 0; width: 100%; justify-content: space-between; gap: 8px; }
+  .drawer-btn[aria-expanded="true"] { background: var(--panel-2); }
+  footer.time { gap: 4px; padding-inline: 8px; }
+  #btn-reset { margin-right: 4px; }
+  .play { width: 92px; height: 40px; }
+  .speeds { margin-left: auto; gap: 3px; }
+  .speeds .lbl { display: none; }
+  .speeds button { height: 40px; min-width: 42px; padding: 0 6px; }
+  .tinfo { display: none; }
+  .view-info {
+    display: flex; gap: 10px; position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 6px;
+    background: rgba(16,19,22,0.78); font-size: 12.5px; color: var(--muted); pointer-events: none;
+  }
+  .view-info b { color: var(--text); font: 500 12.5px var(--font-data); }
+  .view-status { top: 40px; left: 8px; max-width: calc(100% - 110px); }
   .view-hint { display: none; }
-  .navball { width: 64px; height: 64px; }
+  .navball { width: 70px; height: 70px; }
+  .navbtns button { width: 40px; height: 40px; }
+  .toast { top: 110px; }
 }
-@media (min-width: 821px) { #btn-side-close { display: none; } }
+@media (max-width: 380px) {
+  .brand { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { .toast, .toggle .sw, .toggle .sw::after { transition: none; } }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
@@ -278,87 +371,122 @@ footer.time {
   <header class="head">
     <div class="brand">水理<b>ラボ</b></div>
     <div class="menu">
-      <button class="mbtn" id="m-add" aria-haspopup="true" aria-expanded="false" title="追加（Shift+A）">
+      <button class="mbtn" id="m-file" aria-haspopup="true" aria-expanded="false" title="新規・開く・保存・サンプル">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3.5 1.8h6l3 3v9.4h-9z"/><path d="M9.5 1.8v3h3"/></svg>ファイル
+      </button>
+      <div class="dropdown" id="dd-file" hidden></div>
+    </div>
+    <div class="menu">
+      <button class="mbtn" id="m-add" aria-haspopup="true" aria-expanded="false" title="物や水源を追加（Shift+A）">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>追加
       </button>
       <div class="dropdown" id="dd-add" hidden></div>
     </div>
     <div class="menu">
-      <button class="mbtn" id="m-sample" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M2.5 6.5h11M6.5 6.5v7"/></svg><span class="lbl-wide">サンプル</span>
-      </button>
-      <div class="dropdown" id="dd-sample" hidden></div>
-    </div>
-    <div class="menu">
-      <button class="mbtn" id="m-view" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg><span class="lbl-wide">表示</span>
+      <button class="mbtn" id="m-view" aria-haspopup="true" aria-expanded="false" title="見え方と視点">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>表示
       </button>
       <div class="dropdown" id="dd-view" hidden></div>
     </div>
     <div class="spacer"></div>
-    <button class="ibtn" id="btn-undo" title="元に戻す（Ctrl+Z）" aria-label="元に戻す" disabled>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>
+    <button class="mbtn wide-only" data-undo title="元に戻す（Ctrl+Z）" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>元に戻す
     </button>
-    <button class="ibtn" id="btn-redo" title="やり直す（Ctrl+Shift+Z）" aria-label="やり直す" disabled>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>
+    <button class="mbtn wide-only" data-redo title="やり直す（Ctrl+Shift+Z）" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>やり直す
     </button>
     <button class="mbtn drawer-btn" id="btn-side" aria-controls="side" aria-expanded="false">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>シーン
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>設定
     </button>
   </header>
 
-  <nav class="tools" role="radiogroup" aria-label="編集ツール">
-    <button class="tbtn" role="radio" data-tool="move" aria-checked="true" title="移動（G）" aria-label="移動">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15M2.5 10h15M10 2.5l-2.2 2.2M10 2.5l2.2 2.2M10 17.5l-2.2-2.2M10 17.5l2.2-2.2M2.5 10l2.2-2.2M2.5 10l2.2 2.2M17.5 10l-2.2-2.2M17.5 10l-2.2 2.2"/></svg>
-    </button>
-    <button class="tbtn" role="radio" data-tool="rotate" aria-checked="false" title="回転（R）" aria-label="回転">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M14.5 2.5v3.3h-3.3"/></svg>
-    </button>
-    <button class="tbtn" role="radio" data-tool="scale" aria-checked="false" title="寸法（S）" aria-label="寸法">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="8" height="8" rx="1"/><path d="M10 3h7v7M17 3l-6.5 6.5"/></svg>
-    </button>
+  <nav class="tools" aria-label="編集">
+    <div role="radiogroup" aria-label="編集ツール" style="display: contents">
+      <button class="tbtn" role="radio" data-tool="move" aria-checked="true" title="移動（G）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15M2.5 10h15M10 2.5l-2.2 2.2M10 2.5l2.2 2.2M10 17.5l-2.2-2.2M10 17.5l2.2-2.2M2.5 10l2.2-2.2M2.5 10l2.2 2.2M17.5 10l-2.2-2.2M17.5 10l-2.2 2.2"/></svg>移動
+      </button>
+      <button class="tbtn" role="radio" data-tool="rotate" aria-checked="false" title="回転・向き（R）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M14.5 2.5v3.3h-3.3"/></svg>回転
+      </button>
+      <button class="tbtn" role="radio" data-tool="scale" aria-checked="false" title="大きさ（S）">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="8" height="8" rx="1"/><path d="M10 3h7v7M17 3l-6.5 6.5"/></svg>大きさ
+      </button>
+    </div>
     <span class="sep" aria-hidden="true"></span>
-    <button class="tbtn" id="btn-dup" title="複製（Shift+D）" aria-label="複製">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>
+    <button class="tbtn" id="btn-dup" title="複製（Shift+D）">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>複製
     </button>
-    <button class="tbtn" id="btn-del" title="削除（X / Delete）" aria-label="削除">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11"/></svg>
+    <button class="tbtn" id="btn-del" title="削除（X / Delete）">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 5.5h12M8 5.5V4h4v1.5M5.5 5.5l.8 11h7.4l.8-11"/></svg>削除
+    </button>
+    <span class="sep narrow-only" aria-hidden="true"></span>
+    <button class="tbtn narrow-only" data-undo aria-label="元に戻す" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4L2.5 7l3 3"/><path d="M2.5 7h7a4 4 0 0 1 0 8h-2"/></svg>戻す
+    </button>
+    <button class="tbtn narrow-only" data-redo aria-label="やり直す" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>やり直す
     </button>
   </nav>
 
   <main class="view" id="view">
     <canvas id="gpu" tabindex="0" aria-label="3Dビュー"></canvas>
     <canvas id="overlay" aria-hidden="true"></canvas>
-    <div class="view-status" id="status"></div>
+    <div class="view-info" aria-hidden="true"><span>時間 <b data-info="time">0.00 s</b></span><span>水 <b data-info="water">0.00 L</b></span></div>
+    <div class="view-status" id="status" hidden></div>
     <div class="navpad">
-      <div class="navball" id="navball" title="ドラッグで視点を回転・軸をクリックでその方向から見る" role="img" aria-label="視点の回転"></div>
+      <div class="navball" id="navball" title="ドラッグで視点を回す・X / Y / Z の丸を押すとその方向から見る" role="img" aria-label="視点の向き"></div>
       <div class="navbtns">
-        <button id="nav-zoom" title="上下にドラッグで拡大縮小" aria-label="拡大縮小">
-          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="4.5"/><path d="M11 11l4.5 4.5M5.5 7.5h4M7.5 5.5v4"/></svg>
+        <button id="nav-in" title="近づく" aria-label="近づく">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 4v10M4 9h10"/></svg>
         </button>
-        <button id="nav-pan" title="ドラッグで視点を平行移動" aria-label="平行移動">
-          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5V4.2a1.1 1.1 0 0 1 2.2 0V8M8.2 7.5V3.2a1.1 1.1 0 0 1 2.2 0V8M10.4 7.8V4.4a1.1 1.1 0 0 1 2.2 0V9.5M12.6 8.2a1.1 1.1 0 0 1 2.2 0v2.6a5 5 0 0 1-5 5H9a4.2 4.2 0 0 1-3.5-1.9L3.4 11a1.2 1.2 0 0 1 1.9-1.5L6 10.5"/></svg>
+        <button id="nav-out" title="遠ざかる" aria-label="遠ざかる">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 9h10"/></svg>
+        </button>
+        <button id="nav-pan" title="押すと、ドラッグで視点を平行移動するようになります" aria-label="平行移動" aria-pressed="false">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v14M2 9h14M9 2L7 4M9 2l2 2M9 16l-2-2M9 16l2-2M2 9l2-2M2 9l2 2M16 9l-2-2M16 9l-2 2"/></svg>
+        </button>
+        <button id="nav-home" title="全体を表示" aria-label="全体を表示">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 8.5L9 3l6 5.5"/><path d="M4.8 7.2v7.3h8.4V7.2"/></svg>
         </button>
       </div>
     </div>
     <div class="view-hint" id="hint"></div>
+    <div class="welcome" id="welcome" hidden>
+      <div class="card" role="dialog" aria-modal="false" aria-labelledby="welcome-title">
+        <h2 id="welcome-title">水理ラボ</h2>
+        <p>水槽に物と水源を置いて、水の流れ方を試せます。</p>
+        <ol id="welcome-steps"></ol>
+        <button class="btn" id="welcome-ok" type="button">はじめる</button>
+      </div>
+    </div>
   </main>
 
-  <aside class="side" id="side" aria-label="シーンとプロパティ">
-    <section class="side-sec">
-      <div class="sec-head"><span>シーン</span>
-        <button class="ibtn" id="btn-side-close" aria-label="閉じる"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+  <aside class="side" id="side" aria-label="シーンと設定" data-tab="props">
+    <div class="sheet-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="props" aria-selected="true">設定</button>
+        <button role="tab" data-tab="list" aria-selected="false">一覧</button>
       </div>
-      <div class="scroll"><ul class="outliner" id="outliner" role="listbox" aria-label="シーンの項目"></ul></div>
+      <button class="ibtn" id="btn-side-size" aria-label="広げる" title="広げる">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+      </button>
+      <button class="ibtn" id="btn-side-close" aria-label="閉じる" title="閉じる">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <section class="side-sec sec-list">
+      <div class="sec-head"><span class="ttl">シーン</span></div>
+      <div class="scroll" id="outliner-scroll"><ul class="outliner" id="outliner" role="listbox" aria-label="シーンの項目"></ul></div>
     </section>
-    <section class="side-sec">
-      <div class="sec-head"><span id="props-title">プロパティ</span></div>
+    <div class="split" id="split" role="separator" aria-orientation="horizontal" aria-label="一覧と設定の境目" title="ドラッグで一覧の高さを変える"></div>
+    <section class="side-sec sec-props">
+      <div class="sec-head"><span class="ttl" id="props-title">設定</span><span class="acts" id="props-acts"></span></div>
       <div class="scroll"><div class="props" id="props"></div></div>
     </section>
   </aside>
 
   <footer class="time">
-    <button class="ibtn" id="btn-reset" title="最初の状態に戻す（Home）" aria-label="最初の状態に戻す">
+    <button class="ibtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま）" aria-label="水を最初の状態に戻す">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2.5" y="3" width="2" height="10" rx="0.6"/><path d="M13.5 3.4v9.2a.5.5 0 0 1-.8.4L6 8.4a.5.5 0 0 1 0-.8l6.7-4.6a.5.5 0 0 1 .8.4z"/></svg>
     </button>
     <button class="play" id="btn-play" aria-pressed="false" title="再生・一時停止（Space）">
@@ -367,20 +495,20 @@ footer.time {
     <button class="ibtn" id="btn-step" title="コマ送り（→）" aria-label="コマ送り">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 3.4v9.2a.5.5 0 0 0 .8.4L10 8.4a.5.5 0 0 0 0-.8L3.3 3a.5.5 0 0 0-.8.4z"/><rect x="11.5" y="3" width="2" height="10" rx="0.6"/></svg>
     </button>
-    <div class="speeds" role="radiogroup" aria-label="再生速度">
-      <button role="radio" data-speed="1" aria-checked="true">等速</button>
-      <button role="radio" data-speed="0.25" aria-checked="false">1/4</button>
-      <button role="radio" data-speed="0.1" aria-checked="false">1/10</button>
-      <button role="radio" data-speed="0.025" aria-checked="false">1/40</button>
+    <div class="speeds" role="radiogroup" aria-label="再生の速さ">
+      <span class="lbl">速さ</span>
+      <button role="radio" data-speed="1" aria-checked="true" aria-label="ふつうの速さ">1倍</button>
+      <button role="radio" data-speed="0.25" aria-checked="false" aria-label="4分の1の速さ">1/4</button>
+      <button role="radio" data-speed="0.1" aria-checked="false" aria-label="10分の1の速さ">1/10</button>
+      <button role="radio" data-speed="0.025" aria-checked="false" aria-label="40分の1の速さ">1/40</button>
     </div>
     <div class="tinfo">
-      <span>時間 <b id="t-time">0.00 s</b></span>
-      <span>水量 <b id="t-water">0.00 L</b><span class="meter" id="t-meter" title="計算できる水の量の上限に対する割合"><i></i></span></span>
-      <span class="fps">表示 <b id="t-fps">--</b></span>
+      <span>時間 <b data-info="time">0.00 s</b></span>
+      <span>水槽の水 <b data-info="water">0.00 L</b> <span class="cap" data-info="cap"></span></span>
     </div>
   </footer>
 </div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="msg"></span><button class="act" type="button" hidden></button></div>
 <!--SCRIPT-->
 </body>
 </html>

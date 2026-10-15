@@ -75,7 +75,7 @@ function buildDraws() {
       push(mesh, obstacleRot(it), it.pos, hexToRgb(it.color), [m.rough, m.metal, it.material === 'stone' ? 1 : 0, 0], true, it);
     } else if (it.kind === 'source') {
       if (it.mode === 'rain') continue;
-      const d = it.mode === 'shower' ? Math.max(sourceNozzle(it), 0.044) : it.mode === 'drops' ? Math.max(it.dropD / 1000 * 0.7, 0.004) : it.mode === 'burst' ? 0.03 : sourceNozzle(it);
+      const d = sourceOutlet(it);
       const key = `n:${d.toFixed(4)}`;
       const mesh = cachedMesh(key, () => meshNozzle(d));
       push(mesh, rotFromDown(sourceDir(it)), it.pos, [0.82, 0.83, 0.85], [0.22, 1, 0, 0], true, it);

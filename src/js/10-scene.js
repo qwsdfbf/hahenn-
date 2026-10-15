@@ -11,10 +11,11 @@ const SHAPES = {
   torus:     { label: 'ドーナツ', type: 4, dims: { R: 0.05, r: 0.014 } },
   cup:       { label: 'コップ',   type: 5, dims: { r: 0.04, h: 0.10, t: 0.006 } },
   container: { label: '容器',     type: 6, dims: { w: 0.14, h: 0.06, d: 0.10, t: 0.008 } },
-  gutter:    { label: '樋',       type: 7, dims: { len: 0.28, r: 0.03, t: 0.006 } },
+  gutter:    { label: '樋（とい）', type: 7, dims: { len: 0.28, r: 0.03, t: 0.006 } },
 };
 const DIM_LABELS = { w: '幅', h: '高さ', d: '奥行き', t: '厚み', r: '半径', R: '輪の半径', len: '長さ' };
 const DIM_LIMITS = { w: [0.01, 1.2], h: [0.005, 1.0], d: [0.01, 1.2], t: [0.004, 0.05], r: [0.004, 0.4], R: [0.01, 0.4], len: [0.04, 1.2] };
+const DRAIN_LIMITS = [0.005, 0.2];
 
 const MATERIALS = {
   ceramic: { label: '陶器', rough: 0.18, metal: 0 },
@@ -33,6 +34,17 @@ const SOURCE_MODES = {
 };
 
 let uid = 1;
+const SHAPE_ICONS = {
+  box: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M9 2.5l6 3.2v6.6L9 15.5l-6-3.2V5.7z"/><path d="M3 5.7L9 9l6-3.3M9 9v6.5"/></svg>',
+  plate: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2 8.5l7-3 7 3-7 3z"/><path d="M2 8.5v1.6l7 3 7-3V8.5M9 11.5v1.6"/></svg>',
+  sphere: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="9" cy="9" r="6.2"/><path d="M2.8 9c1.6 1.6 10.8 1.6 12.4 0" stroke-dasharray="1.6 1.4"/></svg>',
+  cylinder: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="9" cy="4.2" rx="4.2" ry="1.7"/><path d="M4.8 4.2v9.6c0 .9 1.9 1.7 4.2 1.7s4.2-.8 4.2-1.7V4.2"/></svg>',
+  cone: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M9 2.3l5 11.4M9 2.3L4 13.7"/><ellipse cx="9" cy="13.7" rx="5" ry="1.8"/></svg>',
+  torus: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="9" cy="9.5" rx="6.8" ry="3.8"/><ellipse cx="9" cy="9" rx="2.8" ry="1.2"/></svg>',
+  cup: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><ellipse cx="9" cy="3.8" rx="4.6" ry="1.5"/><path d="M4.4 3.8l.9 10.3c.1.9 1.7 1.5 3.7 1.5s3.6-.6 3.7-1.5l.9-10.3"/></svg>',
+  container: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.5 6.5L9 9.3l6.5-2.8M2.5 6.5v5.2L9 14.5l6.5-2.8V6.5M9 9.3v5.2"/><path d="M2.5 6.5L9 3.7l6.5 2.8" stroke-dasharray="1.5 1.3"/></svg>',
+  gutter: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 6.5c0 3.2 2.2 5.2 5 5.2h4c2.8 0 5-2 5-5.2"/><path d="M2 6.5h2.2M13.8 6.5H16M4.2 6.5c0 2 1.3 3.2 3 3.2h3.6c1.7 0 3-1.2 3-3.2"/></svg>',
+};
 const ICONS = {
   obstacle: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 1.8l5.5 3.1v6.2L8 14.2 2.5 11.1V4.9z"/><path d="M2.5 4.9L8 8l5.5-3.1M8 8v6.2"/></svg>',
   source: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 3.5h6.5a2 2 0 0 1 2 2V7"/><path d="M3 2v3"/><path d="M11.5 9.5v1.5M11.5 13v1"/></svg>',
@@ -67,7 +79,7 @@ function makeSource(pos) {
   };
 }
 function makeBlock(pos) {
-  return { id: uid++, kind: 'block', name: '水の塊', pos: pos ? [...pos] : [0, 0.06, 0], dims: { w: 0.16, h: 0.10, d: 0.16 } };
+  return { id: uid++, kind: 'block', name: '水の塊', pos: pos ? [...pos] : [0, 0.05, 0], dims: { w: 0.16, h: 0.10, d: 0.16 } };
 }
 function makeDrain(pos) {
   return { id: uid++, kind: 'drain', name: '排水口', pos: pos ? [...pos] : [0, 0, 0], rot: [0, 0, 0], r: 0.025 };
@@ -85,6 +97,29 @@ function sourceDir(src) {
   const p = src.pitch * DEG, y = src.yaw * DEG;
   return [Math.cos(p) * Math.sin(y), Math.sin(p), Math.cos(p) * Math.cos(y)];
 }
+// diameter of the nozzle drawn for a source (the outlet itself for streams)
+function sourceOutlet(src) {
+  if (src.mode === 'shower') return Math.max(sourceNozzle(src), 0.044);
+  if (src.mode === 'drops') return Math.max(src.dropD / 1000 * 0.7, 0.004);
+  if (src.mode === 'burst') return 0.03;
+  return sourceNozzle(src);
+}
+
+// ---------- axes shown in the editor ----------
+// The editor uses Blender's axes: X to the right, Y away from the front view, Z up. The solver and the renderer work
+// with Y up and +Z towards the front view, so positions and rotations are converted at the panel and the gizmos.
+const UI_FROM_WORLD = [1, 0, 0, 0, 0, -1, 0, 1, 0];
+const WORLD_FROM_UI = [1, 0, 0, 0, 0, 1, 0, -1, 0];
+function toUI(p) { return [p[0], -p[2], p[1]]; }
+function fromUI(u) { return [u[0], u[2], -u[1]]; }
+function uiAxisDir(i) { return fromUI([i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0]); }
+// editor axis (0 X, 1 Y, 2 Z) that an item's own local axis k shows up as (its local y is its height)
+const UI_OF_LOCAL = [0, 2, 1];
+function uiEuler(rot) { return m3.toEuler(m3.mul(m3.mul(UI_FROM_WORLD, m3.euler(rot[0], rot[1], rot[2])), WORLD_FROM_UI)); }
+function worldEuler(ui) { return m3.toEuler(m3.mul(m3.mul(WORLD_FROM_UI, m3.euler(ui[0], ui[1], ui[2])), UI_FROM_WORLD)); }
+// compass heading of a source in the editor: 0° = away from the front view (+Y), 90° = right (+X)
+function sourceHeading(src) { return ((180 - src.yaw) % 360 + 360) % 360; }
+function setSourceHeading(src, h) { src.yaw = ((180 - h) % 360 + 360) % 360; }
 
 // ---------- signed distance (mirrors the WGSL code; used for picking and placement) ----------
 function sdRoundBox(p, b, r) {
@@ -168,6 +203,21 @@ function obstacleBottom(o) {
     }
   }
   return lo === Infinity ? o.pos[1] - r : lo;
+}
+
+// ---------- where items may be placed ----------
+// inside the tank's footprint and not far above the rim; an obstacle may sink into the floor up to its middle
+// (a half-buried stone), a water block and a source stay above it
+function posLimits(it) {
+  const t = scene.tank;
+  let lo = 0;
+  if (it.kind === 'block') lo = it.dims.h / 2;
+  else if (it.kind === 'source') lo = 0.01;
+  return [[-t.w / 2, t.w / 2], [lo, t.h + 0.4], [-t.d / 2, t.d / 2]];
+}
+function clampItemPos(it, p) {
+  const L = posLimits(it);
+  return p.map((x, i) => clamp(x, L[i][0], Math.max(L[i][0], L[i][1])));
 }
 
 // ---------- scene ----------

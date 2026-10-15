@@ -4,9 +4,8 @@
 const overlay = $('overlay');
 const octx = overlay.getContext('2d');
 let cssW = 1, cssH = 1;
-const AXIS_COLORS = ['#e8625f', '#8bd16a', '#5c9cf0'];
-const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-const editor = { tool: 'move', hover: null, drag: null, modal: null, pointers: new Map(), pinch: null };
+const AXIS_COLORS = ['#ef7471', '#93d673', '#6fa8f2'];
+const editor = { tool: 'move', hover: null, drag: null, modal: null, pointers: new Map(), pinch: null, panMode: false, touch: false, readout: null };
 
 function project(p) {
   const c = m4.transform(view.VP, p);
@@ -27,6 +26,8 @@ function worldPerPx(p) {
   const depth = Math.max(v3.dot(v3.sub(p, view.eye), view.fwd), cam.near);
   return depth * 2 * Math.tan(cam.fov / 2) / cssH;
 }
+// pixel tolerances: fingers cover far more than a mouse pointer
+function tolPx() { return editor.touch ? 22 : 9; }
 function raySphere(ray, c, r) {
   const oc = v3.sub(ray.o, c);
   const b = v3.dot(oc, ray.d), q = v3.dot(oc, oc) - r * r, h = b * b - q;
@@ -40,6 +41,17 @@ function rayPlane(ray, p0, n) {
   const t = v3.dot(v3.sub(p0, ray.o), n) / den;
   return t > 0 ? v3.add(ray.o, v3.mul(ray.d, t)) : null;
 }
+function rayBox(ray, lo, hi) {
+  let t0 = 0, t1 = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const inv = 1 / (ray.d[i] || 1e-12);
+    let a = (lo[i] - ray.o[i]) * inv, b = (hi[i] - ray.o[i]) * inv;
+    if (a > b) [a, b] = [b, a];
+    t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+    if (t0 > t1) return Infinity;
+  }
+  return t0;
+}
 // parameter s of the point on line (p0 + s * axis) closest to the ray
 function rayLineParam(ray, p0, axis) {
   const w0 = v3.sub(p0, ray.o);
@@ -48,6 +60,17 @@ function rayLineParam(ray, p0, axis) {
   if (Math.abs(den) < 1e-8) return null;
   return (b * e - c * d) / den;
 }
+// closest approach between the ray and the segment a-b: { dist, t (along the ray) }
+function raySegment(ray, a, b) {
+  const u = v3.sub(b, a), len = v3.len(u);
+  if (len < 1e-9) { const t = Math.max(v3.dot(v3.sub(a, ray.o), ray.d), 0); return { dist: v3.len(v3.sub(v3.add(ray.o, v3.mul(ray.d, t)), a)), t }; }
+  const ax = v3.mul(u, 1 / len);
+  let s = rayLineParam(ray, a, ax);
+  s = clamp(s === null ? 0 : s, 0, len);
+  const p = v3.add(a, v3.mul(ax, s));
+  const t = Math.max(v3.dot(v3.sub(p, ray.o), ray.d), 0);
+  return { dist: v3.len(v3.sub(v3.add(ray.o, v3.mul(ray.d, t)), p)), t };
+}
 function segDist(px, py, a, b) {
   const vx = b.x - a.x, vy = b.y - a.y;
   const t = clamp(((px - a.x) * vx + (py - a.y) * vy) / (vx * vx + vy * vy || 1), 0, 1);
@@ -55,49 +78,117 @@ function segDist(px, py, a, b) {
 }
 
 // ---------- picking ----------
+// Every candidate gets a screen distance in pixels (0 = the pointer is on it) and a depth. Direct hits win by depth;
+// near misses within the touch/mouse tolerance count when nothing is hit directly.
 function rayObstacle(ray, o) {
   const R = obstacleRot(o);
-  const ts = raySphere(ray, o.pos, boundRadius(o) + 0.003);
-  if (!ts || ts[1] < 0) return Infinity;
-  let t = Math.max(ts[0], 0);
-  for (let i = 0; i < 160 && t < ts[1]; i++) {
-    const d = obstacleSdf(o, v3.add(ray.o, v3.mul(ray.d, t)), R);
-    if (d < 0.0004) return t;
+  const ts = raySphere(ray, o.pos, boundRadius(o) + 0.01);
+  if (!ts || ts[1] < 0) return null;
+  let t = Math.max(ts[0], 0), bestPx = Infinity, bestT = t;
+  for (let i = 0; i < 200 && t < ts[1]; i++) {
+    const p = v3.add(ray.o, v3.mul(ray.d, t));
+    const d = obstacleSdf(o, p, R);
+    if (d < 0.0004) return { px: 0, t };
+    const px = d / worldPerPx(p);
+    if (px < bestPx) { bestPx = px; bestT = t; }
     t += Math.max(d * 0.9, 0.0003);
   }
-  return Infinity;
+  return { px: bestPx, t: bestT };
 }
-function blockEdges(b) {
+function sourceBody(it) {
+  const dir = sourceDir(it);
+  return { a: it.pos, b: v3.sub(it.pos, v3.mul(dir, 0.045)), r: sourceOutlet(it) / 2 + 0.003 };
+}
+function blockBounds(b) {
   const h = [b.dims.w / 2, b.dims.h / 2, b.dims.d / 2];
+  return [b.pos.map((x, i) => x - h[i]), b.pos.map((x, i) => x + h[i])];
+}
+function boxEdges(lo, hi) {
   const c = [];
-  for (let i = 0; i < 8; i++) c.push([b.pos[0] + (i & 1 ? h[0] : -h[0]), b.pos[1] + (i & 2 ? h[1] : -h[1]), b.pos[2] + (i & 4 ? h[2] : -h[2])]);
+  for (let i = 0; i < 8; i++) c.push([i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]);
   return [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]].map(([a, b2]) => [c[a], c[b2]]);
+}
+function blockEdges(b) { const [lo, hi] = blockBounds(b); return boxEdges(lo, hi); }
+function tankEdges() { const t = scene.tank; return boxEdges([-t.w / 2, 0, -t.d / 2], [t.w / 2, t.h, t.d / 2]); }
+function edgesPx(cx, cy, edges) {
+  let best = Infinity;
+  for (const [a, b] of edges) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) best = Math.min(best, segDist(cx, cy, pa, pb)); }
+  return best;
 }
 function pickItem(cx, cy) {
   const ray = rayAt(cx, cy);
-  let best = null, bt = Infinity;
+  const tol = tolPx();
+  let hit = null, near = null;
+  const consider = (it, px, t) => {
+    if (px <= 0) { if (!hit || t < hit.t) hit = { it, t }; }
+    else if (px < tol && (!near || px < near.px)) near = { it, px };
+  };
   for (const it of scene.items) {
-    let t = Infinity;
-    if (it.kind === 'obstacle') t = rayObstacle(ray, it);
-    else if (it.kind === 'source') {
-      const s = raySphere(ray, it.pos, it.mode === 'rain' ? 0.02 : 0.02);
-      if (s && s[1] > 0) t = Math.max(s[0], 0);
+    if (it.kind === 'obstacle') {
+      const r = rayObstacle(ray, it);
+      if (r) consider(it, r.px, r.t);
+    } else if (it.kind === 'source') {
+      if (it.mode === 'rain') {
+        const s = it.rainSize / 2;
+        const cs = [[-s, -s], [s, -s], [s, s], [-s, s]].map(([x, z]) => [it.pos[0] + x, it.pos[1], it.pos[2] + z]);
+        const px = Math.min(edgesPx(cx, cy, cs.map((c, i) => [c, cs[(i + 1) % 4]])), Math.hypot(cx - project(it.pos).x, cy - project(it.pos).y));
+        consider(it, px > 4 ? px : 0, v3.len(v3.sub(it.pos, ray.o)));
+      } else {
+        const b = sourceBody(it);
+        const r = raySegment(ray, b.a, b.b);
+        const p = v3.add(ray.o, v3.mul(ray.d, r.t));
+        consider(it, Math.max(0, (r.dist - b.r) / worldPerPx(p)), r.t);
+      }
     } else if (it.kind === 'drain') {
-      const s = raySphere(ray, it.pos, it.r + 0.006);
-      if (s && s[1] > 0) t = Math.max(s[0], 0);
-    }
-    if (t < bt) { bt = t; best = it; }
-  }
-  if (!best && settings.guides) {
-    for (const it of scene.items) {
-      if (it.kind !== 'block') continue;
-      for (const [a, b] of blockEdges(it)) {
-        const pa = project(a), pb = project(b);
-        if (pa.ok && pb.ok && segDist(cx, cy, pa, pb) < 6) return it;
+      const R = m3.euler(it.rot[0], it.rot[1], it.rot[2]);
+      const n = [R[1], R[4], R[7]];
+      const p = rayPlane(ray, it.pos, n);
+      if (p) {
+        const d = v3.len(v3.sub(p, it.pos)) - it.r - 0.004;
+        consider(it, Math.max(0, d / worldPerPx(p)), v3.len(v3.sub(p, ray.o)));
       }
     }
   }
-  return best;
+  if (hit) return hit.it;
+  if (near) return near.it;
+  // water blocks: their frame or the space they enclose
+  let blk = null, bt = Infinity;
+  for (const it of scene.items) {
+    if (it.kind !== 'block') continue;
+    const [lo, hi] = blockBounds(it);
+    let t = rayBox(ray, lo, hi);
+    if (t === Infinity && settings.guides && edgesPx(cx, cy, blockEdges(it)) < tol) t = 0;
+    if (t < bt) { bt = t; blk = it; }
+  }
+  if (blk) return blk;
+  // the tank: its glass, its rim, or the empty space inside it
+  const t = scene.tank;
+  if (rayBox(ray, [-t.w / 2, 0, -t.d / 2], [t.w / 2, t.h, t.d / 2]) < Infinity || edgesPx(cx, cy, tankEdges()) < tol) return 'tank';
+  return null;
+}
+
+// ---------- what each tool can do with each item ----------
+function canRotate(it) {
+  if (!it || it === 'tank') return false;
+  if (it.kind === 'obstacle') return it.shape !== 'sphere';
+  return it.kind === 'drain' || it.kind === 'source';
+}
+function canScale(it) { return !!(it && it !== 'tank' && scaleMap(it)); }
+function toolNote(tool, it) {
+  if (!it) return null;
+  if (tool === 'rotate' && !canRotate(it)) return it.kind === 'block' ? '水の塊は回転できません' : it.kind === 'obstacle' ? '球は回しても形が変わりません' : null;
+  if (tool === 'scale' && !canScale(it)) return it.kind === 'source' ? '水源の太さは「流量」と「勢い」で決まります' : null;
+  return null;
+}
+// rotation axes that change the shape (round shapes ignore their own axis)
+function rotationAxes(it) {
+  if (it.kind === 'drain') return [0, 2];
+  if (it.kind !== 'obstacle') return [];
+  switch (it.shape) {
+    case 'sphere': return [];
+    case 'cylinder': case 'cone': case 'cup': case 'torus': return [0, 2];
+  }
+  return [0, 1, 2];
 }
 
 // ---------- gizmo handles ----------
@@ -110,36 +201,37 @@ function gizmoHandles(it) {
   const c = it.pos;
   const pc = project(c);
   if (!pc.ok) return [];
-  const L = 78 * worldPerPx(c);
+  const L = (editor.touch ? 96 : 80) * worldPerPx(c);
+  const knob = editor.touch ? 11 : 7;
   const out = [];
   if (editor.tool === 'move') {
-    AXES.forEach((ax, i) => out.push({ type: 'axis', i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))) }));
-    out.push({ type: 'free', a: pc, r: 9 });
-  } else if (editor.tool === 'rotate') {
+    [0, 1, 2].forEach((i) => { const ax = uiAxisDir(i); out.push({ type: 'axis', i, ci: i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob }); });
+    out.push({ type: 'free', a: pc, r: editor.touch ? 14 : 9 });
+  } else if (editor.tool === 'rotate' && canRotate(it)) {
     if (it.kind === 'source') {
-      out.push({ type: 'aim', a: pc, b: project(v3.add(c, v3.mul(sourceDir(it), L))), L });
-    } else if (it.kind === 'obstacle' || it.kind === 'drain') {
-      AXES.forEach((ax, i) => {
+      out.push({ type: 'aim', a: pc, b: project(v3.add(c, v3.mul(sourceDir(it), L))), L, knob: knob + 1 });
+    } else {
+      const R = itemRot(it);
+      for (const i of rotationAxes(it)) {
+        const ax = [R[i], R[3 + i], R[6 + i]];
         const [u, w] = basisOf(ax);
         const pts = [];
-        for (let k = 0; k <= 48; k++) {
-          const a = (k / 48) * Math.PI * 2;
+        for (let k = 0; k <= 64; k++) {
+          const a = (k / 64) * Math.PI * 2;
           pts.push(project(v3.add(c, v3.add(v3.mul(u, Math.cos(a) * L * 0.8), v3.mul(w, Math.sin(a) * L * 0.8)))));
         }
-        out.push({ type: 'ring', i, axis: ax, pts });
-      });
+        out.push({ type: 'ring', i, ci: UI_OF_LOCAL[i], axis: ax, pts });
+      }
     }
-  } else if (editor.tool === 'scale') {
+  } else if (editor.tool === 'scale' && canScale(it)) {
     const R = itemRot(it);
     const map = scaleMap(it);
-    if (map) {
-      [0, 1, 2].forEach((i) => {
-        if (!map[i].length) return;
-        const ax = [R[i], R[3 + i], R[6 + i]];
-        out.push({ type: 'scale', i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))) });
-      });
-      out.push({ type: 'uscale', a: pc, r: 10 });
-    }
+    [0, 1, 2].forEach((i) => {
+      if (!map[i].length) return;
+      const ax = [R[i], R[3 + i], R[6 + i]];
+      out.push({ type: 'scale', i, ci: UI_OF_LOCAL[i], axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob });
+    });
+    out.push({ type: 'uscale', a: pc, r: editor.touch ? 14 : 10 });
   }
   return out;
 }
@@ -161,12 +253,14 @@ function scaleMap(it) {
 function hitHandle(cx, cy) {
   const it = selected();
   if (!it) return null;
-  let best = null, bd = 9;
+  const tol = tolPx();
+  let best = null, bd = tol;
   for (const h of gizmoHandles(it)) {
     let d = Infinity;
-    if (h.type === 'axis' || h.type === 'scale') d = Math.min(segDist(cx, cy, h.a, h.b), Math.hypot(cx - h.b.x, cy - h.b.y) - 4);
-    else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r + 3;
-    else if (h.type === 'aim') d = Math.hypot(cx - h.b.x, cy - h.b.y) - 6;
+    // the inner part of an arrow belongs to the centre handle
+    if (h.type === 'axis' || h.type === 'scale') d = Math.min(segDist(cx, cy, { x: lerp(h.a.x, h.b.x, 0.35), y: lerp(h.a.y, h.b.y, 0.35) }, h.b), Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob);
+    else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r;
+    else if (h.type === 'aim') d = Math.min(Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob, segDist(cx, cy, h.a, h.b) + 2);
     else if (h.type === 'ring') { for (let k = 0; k < h.pts.length - 1; k++) if (h.pts[k].ok && h.pts[k + 1].ok) d = Math.min(d, segDist(cx, cy, h.pts[k], h.pts[k + 1])); }
     if (d < bd) { bd = d; best = h; }
   }
@@ -179,16 +273,14 @@ function setDims(it, base, keys, ratio) {
   const target = it.kind === 'drain' ? it : it.dims;
   const src = it.kind === 'drain' ? base : base.dims;
   for (const k of new Set(keys)) {
-    const lim = DIM_LIMITS[k] || [0.004, 2];
+    const lim = it.kind === 'drain' ? DRAIN_LIMITS : DIM_LIMITS[k] || [0.004, 2];
     target[k] = clamp(src[k] * ratio, Math.max(lim[0], DIM_MIN[k] || 0.004), lim[1]);
   }
 }
 function setItemRotation(it, R) {
   if (it.kind === 'obstacle' || it.kind === 'drain') it.rot = m3.toEuler(R).map((x) => Math.round(x * 100) / 100);
 }
-function clampPos(p) {
-  return [clamp(p[0], -3, 3), clamp(p[1], -0.05, 3), clamp(p[2], -3, 3)];
-}
+function setPos(it, p) { it.pos = clampItemPos(it, p); }
 
 function beginGizmoDrag(h, cx, cy) {
   const it = selected();
@@ -216,12 +308,12 @@ function updateGizmoDrag(cx, cy, shift) {
   d.moved = d.moved || Math.hypot(cx - d.cx, cy - d.cy) > 2;
   if (h.type === 'axis') {
     const s = rayLineParam(ray, d.start.pos, h.axis);
-    if (s !== null && d.s0 !== null) it.pos = clampPos(v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
+    if (s !== null && d.s0 !== null) setPos(it, v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
   } else if (h.type === 'free') {
     const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
     if (hit && d.hit0) {
       const delta = v3.sub(hit, d.hit0);
-      it.pos = clampPos([d.start.pos[0] + snap(delta[0], shift), d.start.pos[1], d.start.pos[2] + snap(delta[2], shift)]);
+      setPos(it, [d.start.pos[0] + snap(delta[0], shift), d.start.pos[1], d.start.pos[2] + snap(delta[2], shift)]);
     }
   } else if (h.type === 'ring') {
     const hp = rayPlane(ray, d.start.pos, h.axis);
@@ -235,41 +327,111 @@ function updateGizmoDrag(cx, cy, shift) {
     let dir;
     if (ts && ts[0] > 0) dir = v3.norm(v3.sub(v3.add(ray.o, v3.mul(ray.d, ts[0])), d.start.pos));
     else { const hp = rayPlane(ray, d.start.pos, view.fwd.map((x) => -x)); if (hp) dir = v3.norm(v3.sub(hp, d.start.pos)); }
-    if (dir) {
-      let pitch = Math.asin(clamp(dir[1], -1, 1)) / DEG, yaw = Math.atan2(dir[0], dir[2]) / DEG;
-      if (shift) { pitch = Math.round(pitch / 15) * 15; yaw = Math.round(yaw / 15) * 15; }
-      it.pitch = Math.round(pitch * 10) / 10; it.yaw = Math.round(((yaw % 360) + 360) % 360 * 10) / 10;
-    }
+    if (dir) setAim(it, dir, shift);
   } else if (h.type === 'scale') {
     const s = rayLineParam(ray, d.start.pos, h.axis);
     if (s !== null && d.s0 && Math.abs(d.s0) > 1e-6) {
       let ratio = Math.max(0.05, s / d.s0);
       if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
       setDims(it, d.start, scaleMap(it)[h.i], ratio);
+      afterScale(it, d.start, ratio, cx, cy);
     }
   } else if (h.type === 'uscale') {
-    const pc = project(d.start.pos);
-    let ratio = Math.max(0.05, Math.hypot(cx - pc.x, cy - pc.y) / d.r0);
-    if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
+    const ratio = dragRatio(d.start.pos, d.r0, cx, cy, shift);
     const map = scaleMap(it);
     setDims(it, d.start, [...map[0], ...map[1], ...map[2]], ratio);
+    afterScale(it, d.start, ratio, cx, cy);
   }
   sceneChanged(false);
 }
+// uniform scaling by dragging: 120 px away from the centre doubles the size, 120 px towards it halves it
+function dragRatio(c, r0, cx, cy, shift) {
+  const pc = project(c);
+  let ratio = Math.pow(2, (Math.hypot(cx - pc.x, cy - pc.y) - r0) / 120);
+  if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
+  return clamp(ratio, 0.05, 20);
+}
+// items standing on the floor keep standing on it while they grow or shrink, and the factor is shown at the pointer
+function afterScale(it, start, ratio, cx, cy) {
+  if (it.kind === 'obstacle') {
+    const b0 = obstacleBottom(start);
+    if (Math.abs(b0) < 0.004) it.pos[1] += b0 - obstacleBottom(it);
+  } else if (it.kind === 'block' && Math.abs(start.pos[1] - start.dims.h / 2) < 0.004) it.pos[1] = it.dims.h / 2 + 0.001;
+  editor.readout = { x: cx, y: cy, text: `×${ratio.toFixed(2)}` };
+}
+// the item's own axis that lies closest to an editor axis (used when S is locked to X, Y or Z)
+function localOfUI(it, ui) {
+  const R = itemRot(it), w = uiAxisDir(ui);
+  let best = 0, bd = -1;
+  for (let k = 0; k < 3; k++) { const d = Math.abs(R[k] * w[0] + R[3 + k] * w[1] + R[6 + k] * w[2]); if (d > bd) { bd = d; best = k; } }
+  return best;
+}
+function setAim(it, dir, shift) {
+  let pitch = Math.asin(clamp(dir[1], -1, 1)) / DEG, yaw = Math.atan2(dir[0], dir[2]) / DEG;
+  if (shift) { pitch = Math.round(pitch / 15) * 15; yaw = Math.round(yaw / 15) * 15; }
+  it.pitch = Math.round(pitch * 10) / 10;
+  it.yaw = Math.round(((yaw % 360) + 360) % 360 * 10) / 10;
+}
 function snap(v, on) { return on ? Math.round(v / 0.01) * 0.01 : v; }
+
+// dragging the selected item itself does what the active tool does
+function beginBodyDrag(it, cx, cy) {
+  const ray = rayAt(cx, cy);
+  const pc = project(it.pos);
+  editor.drag = {
+    kind: 'body', item: it, start: cloneScene(it), x: cx, y: cy, moved: false,
+    hit0: rayPlane(ray, it.pos, [0, 1, 0]), ang0: Math.atan2(cy - pc.y, cx - pc.x), r0: Math.max(Math.hypot(cx - pc.x, cy - pc.y), 12), R0: itemRot(it),
+  };
+}
+function updateBodyDrag(cx, cy, shift) {
+  const d = editor.drag, it = d.item;
+  const ray = rayAt(cx, cy);
+  const pc = project(d.start.pos);
+  if (editor.tool === 'move') {
+    if (shift) {
+      const n = v3.norm([view.fwd[0], 0, view.fwd[2]]);
+      const hit = rayPlane(ray, d.start.pos, n);
+      if (!d.vhit0) d.vhit0 = hit;
+      if (hit && d.vhit0) setPos(it, [d.start.pos[0], d.start.pos[1] + (hit[1] - d.vhit0[1]), d.start.pos[2]]);
+    } else {
+      d.vhit0 = null;
+      const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
+      if (hit && d.hit0) setPos(it, [d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
+    }
+  } else if (editor.tool === 'rotate') {
+    // turn about the vertical axis, following the pointer around the item's centre
+    let da = -(Math.atan2(cy - pc.y, cx - pc.x) - d.ang0) * Math.sign(-view.fwd[1] || 1);
+    if (shift) da = Math.round(da / (15 * DEG)) * 15 * DEG;
+    const Ry = m3.axisAngle([0, 1, 0], da);
+    if (it.kind === 'source') setAim(it, m3.apply(Ry, sourceDir(d.start)), false);
+    else setItemRotation(it, m3.mul(Ry, d.R0));
+  } else if (editor.tool === 'scale') {
+    const ratio = dragRatio(d.start.pos, d.r0, cx, cy, shift);
+    const map = scaleMap(it);
+    setDims(it, d.start, [...map[0], ...map[1], ...map[2]], ratio);
+    afterScale(it, d.start, ratio, cx, cy);
+  }
+  sceneChanged(false);
+}
+function bodyDragAllowed(it) {
+  if (!it || it === 'tank' || it.kind === 'block') return false;
+  if (editor.tool === 'rotate') return canRotate(it);
+  if (editor.tool === 'scale') return canScale(it);
+  return true;
+}
 
 // ---------- modal transforms (G / R / S) ----------
 function startModal(type, cx, cy) {
   const it = selected();
   if (!it || editor.drag) return;
-  if (type === 'rotate' && !(it.kind === 'obstacle' || it.kind === 'drain' || it.kind === 'source')) return;
-  if (type === 'scale' && !scaleMap(it)) return;
+  if (type === 'rotate' && !canRotate(it)) { toast(toolNote('rotate', it) || 'この項目は回転できません', 2000); return; }
+  if (type === 'scale' && !canScale(it)) { toast(toolNote('scale', it) || 'この項目は大きさを変えられません', 2000); return; }
   const ray = rayAt(cx, cy);
   const m = { type, item: it, start: cloneScene(it), axis: -1, cx, cy };
-  m.plane0 = rayPlane(ray, it.pos, view.fwd);
+  m.plane0 = rayPlane(ray, it.pos, [0, 1, 0]);
   const pc = project(it.pos);
   m.ang0 = Math.atan2(cy - pc.y, cx - pc.x);
-  m.r0 = Math.max(Math.hypot(cx - pc.x, cy - pc.y), 10);
+  m.r0 = Math.max(Math.hypot(cx - pc.x, cy - pc.y), 50);
   m.R0 = itemRot(it);
   editor.modal = m;
   updateHint();
@@ -278,35 +440,35 @@ function updateModal(cx, cy, shift) {
   const m = editor.modal, it = m.item;
   const ray = rayAt(cx, cy);
   const pc = project(m.start.pos);
+  if (m.typed) return;
   if (m.type === 'move') {
     if (m.axis >= 0) {
-      const s0 = rayLineParam(rayAt(m.cx, m.cy), m.start.pos, AXES[m.axis]);
-      const s = rayLineParam(ray, m.start.pos, AXES[m.axis]);
-      if (s !== null && s0 !== null) it.pos = clampPos(v3.add(m.start.pos, v3.mul(AXES[m.axis], snap(s - s0, shift))));
+      const ax = uiAxisDir(m.axis);
+      const s0 = rayLineParam(rayAt(m.cx, m.cy), m.start.pos, ax);
+      const s = rayLineParam(ray, m.start.pos, ax);
+      if (s !== null && s0 !== null) setPos(it, v3.add(m.start.pos, v3.mul(ax, snap(s - s0, shift))));
     } else {
-      const hit = rayPlane(ray, m.start.pos, view.fwd);
-      if (hit && m.plane0) { const dl = v3.sub(hit, m.plane0); it.pos = clampPos(v3.add(m.start.pos, dl.map((x) => snap(x, shift)))); }
+      // without an axis the item slides over the floor plane through it (Z moves it up and down)
+      const hit = rayPlane(ray, m.start.pos, [0, 1, 0]);
+      if (hit && m.plane0) setPos(it, [m.start.pos[0] + snap(hit[0] - m.plane0[0], shift), m.start.pos[1], m.start.pos[2] + snap(hit[2] - m.plane0[2], shift)]);
     }
   } else if (m.type === 'rotate') {
     let da = Math.atan2(cy - pc.y, cx - pc.x) - m.ang0;
     if (shift) da = Math.round(da / (15 * DEG)) * 15 * DEG;
+    const axis = m.axis >= 0 ? uiAxisDir(m.axis) : view.fwd.map((x) => -x);
     if (it.kind === 'source') {
-      const axis = m.axis >= 0 ? AXES[m.axis] : view.fwd.map((x) => -x);
-      const R = m3.axisAngle(axis, -da);
-      const dir = m3.apply(R, sourceDir(m.start));
-      it.pitch = Math.round(Math.asin(clamp(dir[1], -1, 1)) / DEG * 10) / 10;
-      it.yaw = Math.round((((Math.atan2(dir[0], dir[2]) / DEG) % 360) + 360) % 360 * 10) / 10;
+      setAim(it, m3.apply(m3.axisAngle(axis, -da), sourceDir(m.start)), false);
     } else {
-      const axis = m.axis >= 0 ? AXES[m.axis] : view.fwd.map((x) => -x);
       const sgn = m.axis >= 0 ? -Math.sign(v3.dot(axis, view.fwd) || -1) : 1;
       setItemRotation(it, m3.mul(m3.axisAngle(axis, -da * sgn), m.R0));
     }
   } else if (m.type === 'scale') {
-    let ratio = Math.max(0.05, Math.hypot(cx - pc.x, cy - pc.y) / m.r0);
+    let ratio = clamp(Math.hypot(cx - pc.x, cy - pc.y) / m.r0, 0.05, 20);
     if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
     const map = scaleMap(it);
-    const keys = m.axis >= 0 ? map[m.axis] : [...map[0], ...map[1], ...map[2]];
+    const keys = m.axis >= 0 ? map[localOfUI(it, m.axis)] : [...map[0], ...map[1], ...map[2]];
     setDims(it, m.start, keys, ratio);
+    afterScale(it, m.start, ratio, cx, cy);
   }
   m.lastX = cx; m.lastY = cy;
   sceneChanged(false);
@@ -314,6 +476,7 @@ function updateModal(cx, cy, shift) {
 function endModal(commit) {
   const m = editor.modal;
   if (!m) return;
+  editor.readout = null;
   if (!commit) { Object.assign(m.item, cloneScene(m.start)); sceneChanged(false); }
   else pushUndo();
   editor.modal = null;
@@ -358,6 +521,7 @@ function frameAll() {
   const half = Math.min(cam.fov / 2, Math.atan(Math.tan(cam.fov / 2) * aspect));
   return { target: [0, scene.tank.h * 0.35, 0], dist: (r / Math.tan(half)) * 0.62 };
 }
+function viewHome() { animateCamera({ ...frameAll(), ...VIEW_PRESETS.home }); }
 function stepCameraAnim(dt) {
   if (!camAnim) return;
   camAnim.t = Math.min(1, camAnim.t + dt / 0.55);
@@ -375,10 +539,13 @@ function stepCameraAnim(dt) {
 }
 
 // ---------- pointer events on the viewport ----------
+// Press on empty space or on an item that is not selected: dragging moves the camera, a click selects.
+// Press on the selected item: dragging applies the active tool to it.
 gpuCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 gpuCanvas.addEventListener('pointerdown', (e) => {
   gpuCanvas.focus({ preventScroll: true });
   closeMenus();
+  editor.touch = e.pointerType !== 'mouse';
   const [cx, cy] = localXY(e);
   editor.pointers.set(e.pointerId, { x: cx, y: cy });
   gpuCanvas.setPointerCapture(e.pointerId);
@@ -388,6 +555,8 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   }
   if (editor.pointers.size === 2) {
     const [a, b] = [...editor.pointers.values()];
+    const d = editor.drag;
+    if (d && (d.kind === 'gizmo' || d.kind === 'body') && d.moved) { Object.assign(d.item, cloneScene(d.start)); sceneChanged(false); }
     editor.drag = null;
     editor.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, dist: cam.dist };
     return;
@@ -395,20 +564,16 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   if (editor.pointers.size > 2) return;
   camAnim = null;
   if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
-    editor.drag = { kind: e.shiftKey ? 'pan' : 'orbit', x: cx, y: cy };
+    editor.drag = { kind: e.shiftKey || e.button === 1 && e.ctrlKey ? 'pan' : 'orbit', x: cx, y: cy };
     return;
   }
   if (e.button !== 0) return;
   const h = hitHandle(cx, cy);
   if (h) { beginGizmoDrag(h, cx, cy); return; }
   const it = pickItem(cx, cy);
-  if (it) {
-    if (selectedId !== it.id) select(it.id);
-    const ray = rayAt(cx, cy);
-    editor.drag = { kind: 'body', item: it, start: cloneScene(it), x: cx, y: cy, hit0: rayPlane(ray, it.pos, [0, 1, 0]), moved: false };
-    return;
-  }
-  editor.drag = { kind: e.shiftKey ? 'pan' : 'orbit', x: cx, y: cy, click: true, moved: false };
+  const sel = selected();
+  if (it && it !== 'tank' && it === sel && bodyDragAllowed(it)) { beginBodyDrag(it, cx, cy); return; }
+  editor.drag = { kind: e.shiftKey || editor.panMode ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, click: true, moved: false, pick: it };
 });
 gpuCanvas.addEventListener('pointermove', (e) => {
   const [cx, cy] = localXY(e);
@@ -420,7 +585,7 @@ gpuCanvas.addEventListener('pointermove', (e) => {
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     cam.dist = clamp(editor.pinch.dist * editor.pinch.d0 / Math.max(d, 1), 0.06, 8);
-    orbit(mx - editor.pinch.mx, my - editor.pinch.my);
+    pan(mx - editor.pinch.mx, my - editor.pinch.my);
     editor.pinch.mx = mx; editor.pinch.my = my;
     limitCamera();
     return;
@@ -428,48 +593,41 @@ gpuCanvas.addEventListener('pointermove', (e) => {
   const d = editor.drag;
   if (!d) {
     if (e.pointerType === 'mouse') {
+      editor.touch = false;
       const h = hitHandle(cx, cy);
       editor.hover = h;
-      gpuCanvas.style.cursor = h ? 'pointer' : pickItem(cx, cy) ? 'move' : 'default';
+      const it = h ? null : pickItem(cx, cy);
+      gpuCanvas.style.cursor = h ? 'pointer' : it && it === selected() && bodyDragAllowed(it) ? 'move' : it ? 'pointer' : 'default';
     }
     return;
   }
   if (d.kind === 'gizmo') { updateGizmoDrag(cx, cy, e.shiftKey); return; }
-  const dx = cx - d.x, dy = cy - d.y;
   if (d.kind === 'orbit' || d.kind === 'pan') {
-    if (Math.abs(dx) + Math.abs(dy) > 0) d.moved = true;
+    if (d.click && !d.moved && Math.hypot(cx - d.sx, cy - d.sy) < (editor.touch ? 8 : 3)) return;
+    d.moved = true;
+    const dx = cx - d.x, dy = cy - d.y;
     if (d.kind === 'orbit') orbit(dx, dy); else pan(dx, dy);
     d.x = cx; d.y = cy;
     return;
   }
   if (d.kind === 'body') {
-    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved && Math.hypot(cx - d.x, cy - d.y) < (editor.touch ? 8 : 4)) return;
     d.moved = true;
-    const it = d.item;
-    const ray = rayAt(cx, cy);
-    if (e.shiftKey) {
-      const n = v3.norm([view.fwd[0], 0, view.fwd[2]]);
-      const hit = rayPlane(ray, d.start.pos, n);
-      if (!d.vhit0) d.vhit0 = hit;
-      if (hit && d.vhit0) it.pos = clampPos([d.start.pos[0], d.start.pos[1] + (hit[1] - d.vhit0[1]), d.start.pos[2]]);
-    } else {
-      d.vhit0 = null;
-      const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
-      if (hit && d.hit0) it.pos = clampPos([d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
-    }
-    sceneChanged(false);
+    updateBodyDrag(cx, cy, e.shiftKey);
   }
 });
 function endPointer(e) {
   editor.pointers.delete(e.pointerId);
-  if (editor.pinch) { if (editor.pointers.size < 2) editor.pinch = null; return; }
+  if (editor.pinch) { if (editor.pointers.size === 0) editor.pinch = null; return; }
   const d = editor.drag;
   if (!d) return;
   editor.drag = null;
+  editor.readout = null;
   if (d.kind === 'gizmo' || d.kind === 'body') {
     if (d.moved) { pushUndo(); refreshPanels(); }
   } else if (d.click && !d.moved && e.type === 'pointerup') {
-    select(null);
+    const id = d.pick === 'tank' ? 'tank' : d.pick ? d.pick.id : null;
+    if (id !== selectedId) select(id, { reveal: true });
   }
 }
 gpuCanvas.addEventListener('pointerup', endPointer);
@@ -477,7 +635,9 @@ gpuCanvas.addEventListener('pointercancel', endPointer);
 gpuCanvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   camAnim = null;
-  const k = Math.exp(clamp(e.deltaY, -240, 240) * (e.deltaMode === 1 ? 0.04 : 0.0013));
+  // trackpads send pinch as ctrl+wheel; two-finger scrolling pans when it is mostly sideways
+  if (!e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.2) { pan(-e.deltaX, 0); return; }
+  const k = Math.exp(clamp(e.deltaY, -240, 240) * (e.deltaMode === 1 ? 0.04 : e.ctrlKey ? 0.01 : 0.0013));
   zoom(k);
 }, { passive: false });
 
@@ -489,33 +649,40 @@ function navDrag(el, fn) {
     camAnim = null;
     let lx = e.clientX, ly = e.clientY, moved = false;
     const sx = e.clientX, sy = e.clientY;
-    const move = (ev) => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 2) moved = true; fn(ev.clientX - lx, ev.clientY - ly); lx = ev.clientX; ly = ev.clientY; };
+    const move = (ev) => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 3) moved = true; if (moved) fn(ev.clientX - lx, ev.clientY - ly); lx = ev.clientX; ly = ev.clientY; };
     const up = (ev) => {
       el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
-      if (!moved && el === $('navball')) navClick(ev);
+      if (!moved && ev.type === 'pointerup') navClick(ev);
     };
     el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   });
 }
 navDrag($('navball'), (dx, dy) => orbit(dx * 1.2, dy * 1.2));
-navDrag($('nav-zoom'), (dx, dy) => zoom(Math.exp(dy * 0.008)));
-navDrag($('nav-pan'), (dx, dy) => pan(dx, dy));
+$('nav-in').addEventListener('click', () => { camAnim = null; animateCamera({ dist: clamp(cam.dist / 1.35, 0.06, 8) }); });
+$('nav-out').addEventListener('click', () => { camAnim = null; animateCamera({ dist: clamp(cam.dist * 1.35, 0.06, 8) }); });
+$('nav-home').addEventListener('click', viewHome);
+function setPanMode(on) {
+  editor.panMode = on;
+  $('nav-pan').setAttribute('aria-pressed', String(on));
+  updateHint();
+}
+$('nav-pan').addEventListener('click', () => setPanMode(!editor.panMode));
 function navBallAxes() {
   const el = $('navball');
   const vr = $('view').getBoundingClientRect(), r = el.getBoundingClientRect();
   const cx = r.left - vr.left + r.width / 2, cy = r.top - vr.top + r.height / 2, R = r.width * 0.36;
-  return AXES.flatMap((ax, i) => [1, -1].map((s) => {
-    const a = v3.mul(ax, s);
+  return [0, 1, 2].flatMap((i) => [1, -1].map((s) => {
+    const a = v3.mul(uiAxisDir(i), s);
     return { i, s, x: cx + v3.dot(a, view.right) * R, y: cy - v3.dot(a, view.up) * R, z: v3.dot(a, view.fwd.map((q) => -q)) };
   }));
 }
 function navClick(ev) {
   const vr = $('view').getBoundingClientRect();
   const x = ev.clientX - vr.left, y = ev.clientY - vr.top;
-  let best = null, bd = 12;
+  let best = null, bd = ev.pointerType === 'mouse' ? 13 : 20;
   for (const a of navBallAxes()) { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a; } }
   if (!best) return;
-  const dir = v3.mul(AXES[best.i], best.s);
+  const dir = v3.mul(uiAxisDir(best.i), best.s);
   const el = Math.asin(clamp(dir[1], -1, 1));
   animateCamera({ el: Math.abs(el) > 1.5 ? Math.sign(el) * 1.5707 : el, az: Math.abs(el) > 1.5 ? cam.az : Math.atan2(dir[0], dir[2]) });
 }
@@ -533,23 +700,26 @@ function drawArrow(a, b, color, width, head) {
     octx.closePath(); octx.fill();
   }
 }
+function drawEdges(edges, style, width, dash) {
+  octx.setLineDash(dash || []);
+  octx.strokeStyle = style; octx.lineWidth = width;
+  octx.beginPath();
+  for (const [a, b] of edges) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) { octx.moveTo(pa.x, pa.y); octx.lineTo(pb.x, pb.y); } }
+  octx.stroke();
+  octx.setLineDash([]);
+}
 function drawOverlay() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   if (overlay.width !== Math.round(cssW * dpr) || overlay.height !== Math.round(cssH * dpr)) { overlay.width = Math.round(cssW * dpr); overlay.height = Math.round(cssH * dpr); }
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
   octx.clearRect(0, 0, cssW, cssH);
   octx.lineCap = 'round'; octx.lineJoin = 'round';
+  if (selectedId === 'tank') drawEdges(tankEdges(), 'rgba(255,170,60,0.95)', 2);
   if (settings.guides) {
     for (const it of scene.items) {
       const sel = it.id === selectedId;
       if (it.kind === 'block') {
-        octx.setLineDash(sel ? [] : [5, 4]);
-        octx.strokeStyle = sel ? 'rgba(255,170,60,0.95)' : 'rgba(110,190,240,0.75)';
-        octx.lineWidth = sel ? 1.6 : 1.2;
-        octx.beginPath();
-        for (const [a, b] of blockEdges(it)) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) { octx.moveTo(pa.x, pa.y); octx.lineTo(pb.x, pb.y); } }
-        octx.stroke();
-        octx.setLineDash([]);
+        drawEdges(blockEdges(it), sel ? 'rgba(255,170,60,0.95)' : 'rgba(110,190,240,0.75)', sel ? 1.6 : 1.2, sel ? [] : [5, 4]);
       } else if (it.kind === 'source') {
         const p = project(it.pos);
         if (!p.ok) continue;
@@ -564,7 +734,7 @@ function drawOverlay() {
         }
         const L = 46 * worldPerPx(it.pos);
         const tip = project(v3.add(it.pos, v3.mul(sourceDir(it), L)));
-        if (it.mode !== 'rain' && editor.tool !== 'rotate' || !sel) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.9)' : 'rgba(160,170,175,0.7)', 1.6, true);
+        if (!(sel && editor.tool === 'rotate')) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.9)' : 'rgba(160,170,175,0.7)', 1.6, it.mode !== 'rain');
         octx.fillStyle = it.enabled ? '#6ebef0' : '#8e989d';
         octx.beginPath(); octx.arc(p.x, p.y, 3.2, 0, Math.PI * 2); octx.fill();
       } else if (it.kind === 'drain' && sel) {
@@ -578,31 +748,44 @@ function drawOverlay() {
     for (const h of gizmoHandles(it)) {
       const hot = editor.drag && editor.drag.h === h || editor.hover && editor.hover.type === h.type && editor.hover.i === h.i;
       if (h.type === 'axis' || h.type === 'scale') {
-        const col = AXIS_COLORS[h.i];
-        drawArrow(h.a, h.b, col, hot ? 3.2 : 2.2, h.type === 'axis');
-        if (h.type === 'scale') { octx.fillStyle = col; octx.fillRect(h.b.x - 5, h.b.y - 5, 10, 10); }
+        const col = AXIS_COLORS[h.ci];
+        drawArrow(h.a, h.b, col, hot ? 3.4 : 2.4, false);
+        octx.fillStyle = col;
+        octx.beginPath();
+        if (h.type === 'scale') octx.rect(h.b.x - h.knob, h.b.y - h.knob, h.knob * 2, h.knob * 2);
+        else octx.arc(h.b.x, h.b.y, hot ? h.knob + 1.5 : h.knob, 0, Math.PI * 2);
+        octx.fill();
+        octx.strokeStyle = 'rgba(16,19,22,0.85)'; octx.lineWidth = 1.2; octx.stroke();
       } else if (h.type === 'free' || h.type === 'uscale') {
-        octx.strokeStyle = 'rgba(255,255,255,0.9)'; octx.lineWidth = hot ? 2.4 : 1.6;
+        octx.strokeStyle = 'rgba(255,255,255,0.92)'; octx.lineWidth = hot ? 2.6 : 1.8;
         octx.beginPath();
         if (h.type === 'free') octx.arc(h.a.x, h.a.y, h.r, 0, Math.PI * 2); else octx.rect(h.a.x - h.r, h.a.y - h.r, h.r * 2, h.r * 2);
         octx.stroke();
       } else if (h.type === 'ring') {
-        octx.strokeStyle = AXIS_COLORS[h.i]; octx.lineWidth = hot ? 3.2 : 2;
+        octx.strokeStyle = AXIS_COLORS[h.ci]; octx.lineWidth = hot ? 3.6 : 2.4;
         octx.beginPath();
         let started = false;
         for (const q of h.pts) { if (!q.ok) { started = false; continue; } if (started) octx.lineTo(q.x, q.y); else { octx.moveTo(q.x, q.y); started = true; } }
         octx.stroke();
       } else if (h.type === 'aim') {
         drawArrow(h.a, h.b, '#f2a43a', hot ? 3 : 2.2, false);
-        octx.fillStyle = '#f2a43a'; octx.beginPath(); octx.arc(h.b.x, h.b.y, hot ? 8 : 6.5, 0, Math.PI * 2); octx.fill();
+        octx.fillStyle = '#f2a43a'; octx.beginPath(); octx.arc(h.b.x, h.b.y, hot ? h.knob + 1.5 : h.knob, 0, Math.PI * 2); octx.fill();
       }
     }
   }
   if (editor.modal && editor.modal.axis >= 0) {
     const m = editor.modal;
-    const c = m.start.pos, ax = AXES[m.axis], L = 4;
+    const c = m.start.pos, ax = uiAxisDir(m.axis), L = 4;
     const a = project(v3.sub(c, v3.mul(ax, L))), b = project(v3.add(c, v3.mul(ax, L)));
     if (a.ok && b.ok) drawArrow(a, b, AXIS_COLORS[m.axis], 1.4, false);
+  }
+  if (editor.readout) {
+    const r = editor.readout;
+    octx.font = '600 13px "IBM Plex Mono", monospace'; octx.textAlign = 'left'; octx.textBaseline = 'middle';
+    const w = octx.measureText(r.text).width + 12;
+    const x = Math.min(r.x + 18, cssW - w - 4), y = Math.max(r.y - 18, 14);
+    octx.fillStyle = 'rgba(16,19,22,0.85)'; octx.fillRect(x, y - 11, w, 22);
+    octx.fillStyle = '#ffd9a3'; octx.fillText(r.text, x + 6, y + 0.5);
   }
   // navigation ball
   const axes = navBallAxes().sort((p, q) => p.z - q.z);
@@ -613,7 +796,7 @@ function drawOverlay() {
     if (a.s > 0) { octx.strokeStyle = col; octx.lineWidth = 2; octx.beginPath(); octx.moveTo(ncx, ncy); octx.lineTo(a.x, a.y); octx.stroke(); }
     octx.fillStyle = a.s > 0 ? col : 'rgba(30,34,38,0.9)';
     octx.strokeStyle = col; octx.lineWidth = 1.5;
-    octx.beginPath(); octx.arc(a.x, a.y, a.s > 0 ? 8 : 6, 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
-    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = '600 10px "IBM Plex Mono", monospace'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
+    octx.beginPath(); octx.arc(a.x, a.y, a.s > 0 ? 8.5 : 6.5, 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
+    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = '600 11px "IBM Plex Mono", monospace'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
   }
 }

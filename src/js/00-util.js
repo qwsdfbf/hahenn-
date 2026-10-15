@@ -120,13 +120,19 @@ function hexToRgb(hex) {
   return s.map((c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
 }
 
+// a short message at the top of the view; `action` adds a button ({ label, run }) and keeps the message up longer
 let toastTimer = 0;
-function toast(msg, ms = 2600) {
+function toast(msg, ms = 2600, action = null) {
   const t = $('toast');
-  t.textContent = msg;
+  t.querySelector('.msg').textContent = msg;
+  const b = t.querySelector('.act');
+  b.hidden = !action;
+  b.textContent = action ? action.label : '';
+  b.onclick = action ? () => { t.classList.remove('show'); action.run(); } : null;
+  t.classList.toggle('has-act', !!action);
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? Math.max(ms, 5000) : ms);
 }
 function fatal(title, body) {
   const d = document.createElement('div');
