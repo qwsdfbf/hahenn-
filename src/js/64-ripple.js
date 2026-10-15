@@ -117,11 +117,10 @@ const WGSL_RMASKBUILD = WGSL_SIM_COMMON + WGSL_SDF(1) + /* wgsl */`
   let h = textureLoad(topH, vec2i(clamp(uv * dims, vec2f(0.0), dims - 1.0)), 0).r;
   var m = 0.0;
   if (h >= 0.0) {
+    // walls of obstacles at the water line take the waves out (also thin ones, so a cup keeps its ripples inside);
+    // the soft edge avoids ringing from a sharp cut
     let d = sceneSdf(vec3f(xz.x, h - 0.002, xz.y));
-    m = smoothstep(0.0, 0.006, d);
-    // gentle absorption over a few frames rather than a hard edge
-    m = mix(0.92, 1.0, m);
-    if (d < 0.0) { m = 0.7; }
+    m = smoothstep(-0.003, 0.006, d);
   } else { m = 0.75; }
   textureStore(outTex, vec2i(gid.xy), vec4f(m, 0.0, 0.0, 0.0));
 }`;

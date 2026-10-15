@@ -220,11 +220,29 @@ struct FO { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
     refl = mix(refl, ground, clamp(-R.y * 4.0, 0.0, 1.0));
   }
   let tc = clamp(th, 0.0, 0.25);
-  // a thin column or drop acts as a strong lens; a deep pool shifts the view in proportion to its depth
-  let rpx = F.water.w * F.misc.x / z;
-  let shift = nV.xy * (min(tc * 0.35, 0.03) * F.misc.x / z + rpx * 1.4 * (1.0 - smoothstep(0.02, 0.06, tc)));
+  // a deep pool shifts the view in proportion to its depth
+  let shift = nV.xy * min(tc * 0.35, 0.03) * F.misc.x / z;
   let uv = clamp((vec2f(p) + 0.5 + vec2f(-shift.x, shift.y)) * F.screen.zw, F.screen.zw, vec2f(1.0) - F.screen.zw);
-  let behind = textureSampleLevel(sceneColor, samp, uv, 0.0).rgb;
+  var behind = textureSampleLevel(sceneColor, samp, uv, 0.0).rgb;
+  // a thin stream or a drop is a strong lens: the ray leaves its far side bent by 2(θi − θt) towards the axis and
+  // picks up what lies behind on the opposite side, so the surroundings show through it flipped and squeezed
+  let thin = 1.0 - smoothstep(0.02, 0.06, tc);
+  if (thin > 0.0) {
+    let d = normalize(P);
+    let ti = acos(clamp(-dot(d, nV), 0.0, 1.0));
+    let dev = 2.0 * (ti - asin(sin(ti) / 1.333));
+    let side = nV - d * dot(nV, d);
+    let sl = length(side);
+    if (sl > 1e-4) {
+      let dx = normalize(d * cos(dev) - (side / sl) * sin(dev));
+      let pb = P + dx * (max(zs - z, 0.02) / max(-dx.z, 0.2));
+      let cb = F.proj * vec4f(pb, 1.0);
+      let ub = vec2f(cb.x / cb.w * 0.5 + 0.5, 0.5 - cb.y / cb.w * 0.5);
+      var seen = skyL(toWorld(dx), 0.0);
+      if (cb.w > 0.0 && all(ub > F.screen.zw) && all(ub < vec2f(1.0) - F.screen.zw)) { seen = textureSampleLevel(sceneColor, samp, ub, 0.0).rgb; }
+      behind = mix(behind, seen, thin);
+    }
+  }
   let absorb = exp(-F.water.rgb * tc);
   let body = vec3f(0.06, 0.16, 0.17) * (F.skyIrr.rgb + F.sunColor.rgb * 0.3) * (1.0 - absorb.g);
   var col = mix(behind * absorb + body, refl, Fr);

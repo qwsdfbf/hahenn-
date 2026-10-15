@@ -194,14 +194,18 @@ fn splashCrown(x: vec3f, U: f32, m: f32, id: u32) {
   if (ing) {
     let n0 = countAt(c0);
     if (n0 >= 4u) { airborne = 0.0; }
-    else if (n0 <= 2u && c0.y + 2 < NY() && countAt(c0 + vec3i(0, 1, 0)) == 0u && countAt(c0 + vec3i(0, 2, 0)) == 0u) {
+    else if (n0 <= 2u && c0.y + 2 < NY()) {
+      // alone around its own cell, and nothing in the two layers of cells above it (a stream that wanders sideways
+      // between columns still has its following water up there)
       var around = 0u;
+      var above = 0u;
       for (var dz = -1; dz <= 1; dz++) {
-        for (var dy = -1; dy <= 1; dy++) {
-          for (var dx = -1; dx <= 1; dx++) { around += countAt(c0 + vec3i(dx, dy, dz)); }
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dy = -1; dy <= 1; dy++) { around += countAt(c0 + vec3i(dx, dy, dz)); }
+          above += countAt(c0 + vec3i(dx, 1, dz)) + countAt(c0 + vec3i(dx, 2, dz));
         }
       }
-      if (around <= 4u) { airborne = 1.0; }
+      if (around <= 4u && above == 0u) { airborne = 1.0; }
     }
   }
   let g1 = gridPos(x);
