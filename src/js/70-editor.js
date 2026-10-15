@@ -97,7 +97,7 @@ function rayObstacle(ray, o) {
 }
 function sourceBody(it) {
   const dir = sourceDir(it);
-  return { a: it.pos, b: v3.sub(it.pos, v3.mul(dir, 0.045)), r: sourceOutlet(it) / 2 + 0.003 };
+  return { a: it.pos, b: v3.sub(it.pos, v3.mul(dir, 0.05)), r: sourceOutlet(it) / 2 + 0.006 };
 }
 function blockBounds(b) {
   const h = [b.dims.w / 2, b.dims.h / 2, b.dims.d / 2];
@@ -115,7 +115,9 @@ function edgesPx(cx, cy, edges) {
   for (const [a, b] of edges) { const pa = project(a), pb = project(b); if (pa.ok && pb.ok) best = Math.min(best, segDist(cx, cy, pa, pb)); }
   return best;
 }
-function pickItem(cx, cy) {
+// { it, exact }: exact when the pointer is on the item itself, otherwise within the tolerance of it. Water blocks and
+// the tank are regions the view looks through, so they are picked by their frames only.
+function pickAt(cx, cy) {
   const ray = rayAt(cx, cy);
   const tol = tolPx();
   let hit = null, near = null;
@@ -149,23 +151,21 @@ function pickItem(cx, cy) {
       }
     }
   }
-  if (hit) return hit.it;
-  if (near) return near.it;
-  // water blocks: their frame or the space they enclose
-  let blk = null, bt = Infinity;
-  for (const it of scene.items) {
-    if (it.kind !== 'block') continue;
-    const [lo, hi] = blockBounds(it);
-    let t = rayBox(ray, lo, hi);
-    if (t === Infinity && settings.guides && edgesPx(cx, cy, blockEdges(it)) < tol) t = 0;
-    if (t < bt) { bt = t; blk = it; }
+  if (hit) return { it: hit.it, exact: true };
+  if (near) return { it: near.it, exact: false };
+  let frame = null, fd = tol;
+  if (settings.guides) {
+    for (const it of scene.items) {
+      if (it.kind !== 'block') continue;
+      const d = edgesPx(cx, cy, blockEdges(it));
+      if (d < fd) { fd = d; frame = it; }
+    }
   }
-  if (blk) return blk;
-  // the tank: its glass, its rim, or the empty space inside it
-  const t = scene.tank;
-  if (rayBox(ray, [-t.w / 2, 0, -t.d / 2], [t.w / 2, t.h, t.d / 2]) < Infinity || edgesPx(cx, cy, tankEdges()) < tol) return 'tank';
-  return null;
+  if (frame) return { it: frame, exact: false };
+  if (edgesPx(cx, cy, tankEdges()) < tol) return { it: 'tank', exact: false };
+  return { it: null, exact: false };
 }
+function pickItem(cx, cy) { return pickAt(cx, cy).it; }
 
 // ---------- what each tool can do with each item ----------
 function canRotate(it) {
@@ -197,16 +197,33 @@ function itemRot(it) {
   if (it.kind === 'drain') return m3.euler(it.rot[0], it.rot[1], it.rot[2]);
   return [1, 0, 0, 0, 1, 0, 0, 0, 1];
 }
+// screen area where a handle can be grabbed: inside the view and clear of the navigation buttons
+function handleSpace() {
+  const vr = $('view').getBoundingClientRect(), nr = document.querySelector('.navpad').getBoundingClientRect();
+  return { w: cssW, h: cssH, nav: { l: nr.left - vr.left - 8, r: nr.right - vr.left + 8, t: nr.top - vr.top - 8, b: nr.bottom - vr.top + 8 } };
+}
+function grabbable(p, sp) {
+  if (!p.ok || p.x < 12 || p.y < 12 || p.x > sp.w - 12 || p.y > sp.h - 12) return false;
+  return !(p.x > sp.nav.l && p.x < sp.nav.r && p.y > sp.nav.t && p.y < sp.nav.b);
+}
+// an arrow whose end would be hidden (off the view or under the navigation buttons) is drawn the other way round
+function arrowEnd(c, ax, L, sp) {
+  const b = project(v3.add(c, v3.mul(ax, L)));
+  if (grabbable(b, sp)) return { axis: ax, b };
+  const nax = v3.mul(ax, -1), nb = project(v3.add(c, v3.mul(nax, L)));
+  return grabbable(nb, sp) ? { axis: nax, b: nb } : { axis: ax, b };
+}
 function gizmoHandles(it) {
   const c = it.pos;
   const pc = project(c);
   if (!pc.ok) return [];
   const L = (editor.touch ? 96 : 80) * worldPerPx(c);
   const knob = editor.touch ? 11 : 7;
+  const sp = handleSpace();
   const out = [];
   if (editor.tool === 'move') {
-    [0, 1, 2].forEach((i) => { const ax = uiAxisDir(i); out.push({ type: 'axis', i, ci: i, axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob }); });
-    out.push({ type: 'free', a: pc, r: editor.touch ? 14 : 9 });
+    [0, 1, 2].forEach((i) => { const e = arrowEnd(c, uiAxisDir(i), L, sp); out.push({ type: 'axis', i, ci: i, axis: e.axis, a: pc, b: e.b, knob }); });
+    if (it.kind !== 'block') out.push({ type: 'free', a: pc, r: editor.touch ? 14 : 9 });
   } else if (editor.tool === 'rotate' && canRotate(it)) {
     if (it.kind === 'source') {
       out.push({ type: 'aim', a: pc, b: project(v3.add(c, v3.mul(sourceDir(it), L))), L, knob: knob + 1 });
@@ -228,8 +245,8 @@ function gizmoHandles(it) {
     const map = scaleMap(it);
     [0, 1, 2].forEach((i) => {
       if (!map[i].length) return;
-      const ax = [R[i], R[3 + i], R[6 + i]];
-      out.push({ type: 'scale', i, ci: UI_OF_LOCAL[i], axis: ax, a: pc, b: project(v3.add(c, v3.mul(ax, L))), knob });
+      const e = arrowEnd(c, [R[i], R[3 + i], R[6 + i]], L, sp);
+      out.push({ type: 'scale', i, ci: UI_OF_LOCAL[i], axis: e.axis, a: pc, b: e.b, knob });
     });
     out.push({ type: 'uscale', a: pc, r: editor.touch ? 14 : 10 });
   }
@@ -250,21 +267,27 @@ function scaleMap(it) {
   }
   return null;
 }
+// the handle under the pointer; `firm` when the pointer is on a knob, a ring or the centre (rather than on the
+// shaft of an arrow, which gives way to the item's own body)
 function hitHandle(cx, cy) {
   const it = selected();
   if (!it) return null;
   const tol = tolPx();
-  let best = null, bd = tol;
+  let best = null, bd = tol, firm = false;
   for (const h of gizmoHandles(it)) {
-    let d = Infinity;
-    // the inner part of an arrow belongs to the centre handle
-    if (h.type === 'axis' || h.type === 'scale') d = Math.min(segDist(cx, cy, { x: lerp(h.a.x, h.b.x, 0.35), y: lerp(h.a.y, h.b.y, 0.35) }, h.b), Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob);
-    else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r;
+    let d = Infinity, f = true;
+    if (h.type === 'axis' || h.type === 'scale') {
+      const dk = Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob;
+      // the inner part of an arrow belongs to the centre handle
+      const ds = segDist(cx, cy, { x: lerp(h.a.x, h.b.x, 0.35), y: lerp(h.a.y, h.b.y, 0.35) }, h.b);
+      d = Math.min(dk, ds);
+      f = dk <= 3;
+    } else if (h.type === 'free' || h.type === 'uscale') d = Math.hypot(cx - h.a.x, cy - h.a.y) - h.r;
     else if (h.type === 'aim') d = Math.min(Math.hypot(cx - h.b.x, cy - h.b.y) - h.knob, segDist(cx, cy, h.a, h.b) + 2);
     else if (h.type === 'ring') { for (let k = 0; k < h.pts.length - 1; k++) if (h.pts[k].ok && h.pts[k + 1].ok) d = Math.min(d, segDist(cx, cy, h.pts[k], h.pts[k + 1])); }
-    if (d < bd) { bd = d; best = h; }
+    if (d < bd) { bd = d; best = h; firm = f; }
   }
-  return best;
+  return best ? { h: best, firm } : null;
 }
 
 // ---------- applying edits ----------
@@ -514,12 +537,21 @@ let camAnim = null;
 function animateCamera(to) {
   camAnim = { from: { target: [...cam.target], dist: cam.dist, az: cam.az, el: cam.el }, to, t: 0 };
 }
+// the tank and everything in the scene (sources usually hang above the rim)
 function frameAll() {
-  const r = Math.max(scene.tank.w, scene.tank.d, scene.tank.h) * 0.85 + 0.12;
-  // fit the narrower of the two view angles so the tank stays in frame on tall screens too
+  const t = scene.tank;
+  const lo = [-t.w / 2, 0, -t.d / 2], hi = [t.w / 2, t.h, t.d / 2];
+  for (const it of scene.items) {
+    const r = it.kind === 'obstacle' ? boundRadius(it) : it.kind === 'source' ? 0.05 : it.kind === 'block' ? 0 : it.r;
+    const top = it.kind === 'source' ? it.pos[1] + 0.05 : it.pos[1] + r;
+    for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], it.pos[k] - r); hi[k] = Math.max(hi[k], k === 1 ? top : it.pos[k] + r); }
+  }
+  const size = Math.max(hi[0] - lo[0], hi[2] - lo[2], hi[1] - lo[1]);
+  const r = size * 0.85 + 0.12;
+  // fit the narrower of the two view angles so everything stays in frame on tall screens too
   const aspect = cssW > 1 && cssH > 1 ? cssW / cssH : 1.6;
   const half = Math.min(cam.fov / 2, Math.atan(Math.tan(cam.fov / 2) * aspect));
-  return { target: [0, scene.tank.h * 0.35, 0], dist: (r / Math.tan(half)) * 0.62 };
+  return { target: [(lo[0] + hi[0]) / 2, lo[1] + (hi[1] - lo[1]) * 0.4, (lo[2] + hi[2]) / 2], dist: (r / Math.tan(half)) * 0.62 };
 }
 function viewHome() { animateCamera({ ...frameAll(), ...VIEW_PRESETS.home }); }
 function stepCameraAnim(dt) {
@@ -568,12 +600,16 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (e.button !== 0) return;
+  // knobs, rings and the centre first; then the selected item's own body; then the shafts of the arrows
   const h = hitHandle(cx, cy);
-  if (h) { beginGizmoDrag(h, cx, cy); return; }
-  const it = pickItem(cx, cy);
+  const pk = pickAt(cx, cy);
   const sel = selected();
-  if (it && it !== 'tank' && it === sel && bodyDragAllowed(it)) { beginBodyDrag(it, cx, cy); return; }
-  editor.drag = { kind: e.shiftKey || editor.panMode ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, click: true, moved: false, pick: it };
+  const onBody = pk.it && pk.it === sel && bodyDragAllowed(sel);
+  if (h && h.firm) { beginGizmoDrag(h.h, cx, cy); return; }
+  if (onBody && pk.exact) { beginBodyDrag(sel, cx, cy); return; }
+  if (h) { beginGizmoDrag(h.h, cx, cy); return; }
+  if (onBody) { beginBodyDrag(sel, cx, cy); return; }
+  editor.drag = { kind: e.shiftKey || editor.panMode ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, click: true, moved: false, pick: pk.it };
 });
 gpuCanvas.addEventListener('pointermove', (e) => {
   const [cx, cy] = localXY(e);
@@ -594,10 +630,13 @@ gpuCanvas.addEventListener('pointermove', (e) => {
   if (!d) {
     if (e.pointerType === 'mouse') {
       editor.touch = false;
-      const h = hitHandle(cx, cy);
+      const hh = hitHandle(cx, cy);
+      const pk = pickAt(cx, cy);
+      const sel = selected();
+      const onBody = pk.it && pk.it === sel && bodyDragAllowed(sel);
+      const h = hh && (hh.firm || !(onBody && pk.exact)) ? hh.h : null;
       editor.hover = h;
-      const it = h ? null : pickItem(cx, cy);
-      gpuCanvas.style.cursor = h ? 'pointer' : it && it === selected() && bodyDragAllowed(it) ? 'move' : it ? 'pointer' : 'default';
+      gpuCanvas.style.cursor = h ? 'pointer' : onBody ? 'move' : pk.it ? 'pointer' : 'default';
     }
     return;
   }
@@ -700,6 +739,49 @@ function drawArrow(a, b, color, width, head) {
     octx.closePath(); octx.fill();
   }
 }
+// where water from a source goes: the free-fall path from the outlet until it meets an obstacle or the floor, and a
+// ring where it lands
+function waterPath(src) {
+  const dir = sourceDir(src);
+  let p = v3.add(src.pos, v3.mul(dir, 0.002));
+  let v = v3.mul(dir, src.mode === 'drops' ? src.speed : Math.max(src.speed, 0.05));
+  const pts = [p];
+  const obs = scene.items.filter((it) => it.kind === 'obstacle');
+  const solidAt = (q) => q[1] <= 0 || obs.some((o) => v3.len(v3.sub(q, o.pos)) < boundRadius(o) + 0.01 && obstacleSdf(o, q) < 0);
+  const dt = 0.004;
+  for (let i = 0; i < 400; i++) {
+    const q = [p[0] + v[0] * dt, p[1] + v[1] * dt - 0.5 * G * dt * dt, p[2] + v[2] * dt];
+    v = [v[0], v[1] - G * dt, v[2]];
+    if (solidAt(q)) {
+      // the landing point between p and q
+      let a = 0, b = 1;
+      for (let k = 0; k < 12; k++) { const m = (a + b) / 2; if (solidAt(v3.add(p, v3.mul(v3.sub(q, p), m)))) b = m; else a = m; }
+      const hit = v3.add(p, v3.mul(v3.sub(q, p), a));
+      pts.push(hit);
+      return { pts, hit };
+    }
+    pts.push(q);
+    p = q;
+    if (Math.abs(p[0]) > 3 || Math.abs(p[2]) > 3) break;
+  }
+  return { pts, hit: null };
+}
+function drawWaterPath(src) {
+  const { pts, hit } = waterPath(src);
+  octx.setLineDash([5, 5]);
+  octx.strokeStyle = 'rgba(110,190,240,0.85)'; octx.lineWidth = 1.4;
+  octx.beginPath();
+  let started = false;
+  for (const q of pts) { const s = project(q); if (!s.ok) { started = false; continue; } if (started) octx.lineTo(s.x, s.y); else { octx.moveTo(s.x, s.y); started = true; } }
+  octx.stroke();
+  octx.setLineDash([]);
+  if (hit) {
+    const r = Math.max(sourceOutlet(src) / 2, 0.012);
+    octx.beginPath();
+    for (let k = 0; k <= 32; k++) { const a = (k / 32) * Math.PI * 2; const s = project([hit[0] + Math.cos(a) * r, hit[1] + 0.001, hit[2] + Math.sin(a) * r]); if (k) octx.lineTo(s.x, s.y); else octx.moveTo(s.x, s.y); }
+    octx.strokeStyle = 'rgba(110,190,240,0.95)'; octx.lineWidth = 1.6; octx.stroke();
+  }
+}
 function drawEdges(edges, style, width, dash) {
   octx.setLineDash(dash || []);
   octx.strokeStyle = style; octx.lineWidth = width;
@@ -732,11 +814,12 @@ function drawOverlay() {
           octx.beginPath(); cs.forEach((c, i) => (i ? octx.lineTo(c.x, c.y) : octx.moveTo(c.x, c.y))); octx.closePath(); octx.stroke();
           octx.setLineDash([]);
         }
-        const L = 46 * worldPerPx(it.pos);
+        if (sel && it.mode !== 'rain') drawWaterPath(it);
+        const L = 30 * worldPerPx(it.pos);
         const tip = project(v3.add(it.pos, v3.mul(sourceDir(it), L)));
-        if (!(sel && editor.tool === 'rotate')) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.9)' : 'rgba(160,170,175,0.7)', 1.6, it.mode !== 'rain');
+        if (!(sel && editor.tool === 'rotate')) drawArrow(p, tip, it.enabled ? 'rgba(110,190,240,0.75)' : 'rgba(160,170,175,0.6)', 1.4, it.mode !== 'rain');
         octx.fillStyle = it.enabled ? '#6ebef0' : '#8e989d';
-        octx.beginPath(); octx.arc(p.x, p.y, 3.2, 0, Math.PI * 2); octx.fill();
+        octx.beginPath(); octx.arc(p.x, p.y, 3, 0, Math.PI * 2); octx.fill();
       } else if (it.kind === 'drain' && sel) {
         const p = project(it.pos);
         if (p.ok) { octx.strokeStyle = 'rgba(255,170,60,0.9)'; octx.lineWidth = 1.4; octx.beginPath(); octx.arc(p.x, p.y, 6, 0, Math.PI * 2); octx.stroke(); }

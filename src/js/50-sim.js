@@ -62,8 +62,8 @@ class FluidSim {
     this.countU = [0, 1, 2, 3, 4].map((m) => { const b = gbuf(16, BU.UNIFORM | D, 'countMode'); device.queue.writeBuffer(b, 0, new Uint32Array([m, 0, 0, 0])); return b; });
     this.emitU = gbuf(16, BU.UNIFORM | D, 'emitInfo');
     this.wwU = gbuf(16, BU.UNIFORM | D, 'wwInfo');
-    this.parts = [0, 1].map(() => gbuf(this.cap * 32, S | D, 'particles'));
-    this.ww = [0, 1].map(() => gbuf(this.wwCap * 32, S | D, 'whitewater'));
+    this.parts = [0, 1].map(() => gbuf(this.cap * 32, S | D | BU.COPY_SRC, 'particles'));
+    this.ww = [0, 1].map(() => gbuf(this.wwCap * 32, S | D | BU.COPY_SRC, 'whitewater'));
     this.counters = gbuf(32, S | D | BU.COPY_SRC, 'counters');
     this.args = gbuf(64, S | BU.INDIRECT, 'args');
     this.acc = gbuf(this.nodes * 24, S | D, 'acc');
@@ -106,8 +106,40 @@ class FluidSim {
     };
   }
 
+  // a copy of the water (particles, whitewater, counters, ripples, the sources' progress) taken before a reset or a
+  // clear, so that the toast's undo can bring it back exactly
+  saveWater() {
+    const C = BU.COPY_SRC | BU.COPY_DST;
+    const rippleBytes = this.ripple.M * this.ripple.M * 8;
+    if (!this.saved) this.saved = { parts: gbuf(this.cap * 32, C, 'savedParts'), ww: gbuf(this.wwCap * 32, C, 'savedWhitewater'), counters: gbuf(32, C, 'savedCounters'), ripple: gbuf(rippleBytes, C, 'savedRipple') };
+    const s = this.saved;
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.parts[this.cur], 0, s.parts, 0, this.cap * 32);
+    enc.copyBufferToBuffer(this.ww[this.wwCur], 0, s.ww, 0, this.wwCap * 32);
+    enc.copyBufferToBuffer(this.counters, 0, s.counters, 0, 32);
+    enc.copyBufferToBuffer(this.ripple.state, 0, s.ripple, 0, rippleBytes);
+    device.queue.submit([enc.finish()]);
+    s.meta = { time: this.time, count: this.count, wwCount: this.wwCount, impacts: this.impacts, full: this.full, acc: new Map([...this.emitAcc].map(([k, v]) => [k, { ...v }])) };
+  }
+  restoreWater() {
+    const s = this.saved;
+    if (!s || !s.meta) return false;
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToBuffer(s.parts, 0, this.parts[this.cur], 0, this.cap * 32);
+    enc.copyBufferToBuffer(s.ww, 0, this.ww[this.wwCur], 0, this.wwCap * 32);
+    enc.copyBufferToBuffer(s.counters, 0, this.counters, 0, 32);
+    enc.copyBufferToBuffer(s.ripple, 0, this.ripple.state, 0, this.ripple.M * this.ripple.M * 8);
+    device.queue.submit([enc.finish()]);
+    const m = s.meta;
+    this.time = m.time; this.count = m.count; this.wwCount = m.wwCount; this.impacts = m.impacts; this.full = m.full;
+    this.emitAcc = new Map([...m.acc].map(([k, v]) => [k, { ...v }]));
+    s.meta = null;
+    return true;
+  }
+
   destroy() {
     this.dead = true;
+    if (this.saved) for (const b of Object.values(this.saved)) if (b instanceof GPUBuffer) b.destroy();
     for (const k of Object.keys(this)) { const b = this[k]; if (b instanceof GPUBuffer) b.destroy(); }
     for (const b of [...this.parts, ...this.ww, ...this.parity, ...this.countU, ...this.staging.map((st) => st.buf)]) b.destroy();
     this.ripple.destroy();

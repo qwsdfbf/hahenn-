@@ -165,11 +165,17 @@ function meshGutter(hl, R, t) {
   }
   return mb;
 }
+// a tap: a short spout with the outlet at the origin (local -Y is the water's direction) under a wider body
 function meshNozzle(d) {
-  const ri = Math.max(d / 2, 0.002), ro = ri + 0.003, len = 0.045;
-  const outer = [[ri, 0, 0, -1], [ro, 0, 0, -1], [ro, 0, 1, 0], [ro, len, 1, 0], [ro, len, 0, 1], [0, len, 0, 1]];
-  const inner = [[ri, 0, -1, 0], [ri, len * 0.6, -1, 0]];
-  return meshLathe([outer.slice(0, 2), outer.slice(2, 4), outer.slice(4), inner], 32);
+  const ri = Math.max(d / 2, 0.002), ro = ri + 0.0025, rb = ri + 0.009, l1 = 0.022, len = 0.05;
+  return meshLathe([
+    [[ri, 0, 0, -1], [ro, 0, 0, -1]],
+    [[ro, 0, 1, 0], [ro, l1, 1, 0]],
+    [[ro, l1, 0, -1], [rb, l1, 0, -1]],
+    [[rb, l1, 1, 0], [rb, len, 1, 0]],
+    [[rb, len, 0, 1], [0, len, 0, 1]],
+    [[ri, 0, -1, 0], [ri, l1 * 0.8, -1, 0]],
+  ], 32);
 }
 function meshDrainRing(r) {
   const rw = 0.004;

@@ -78,7 +78,7 @@ function buildDraws() {
       const d = sourceOutlet(it);
       const key = `n:${d.toFixed(4)}`;
       const mesh = cachedMesh(key, () => meshNozzle(d));
-      push(mesh, rotFromDown(sourceDir(it)), it.pos, [0.82, 0.83, 0.85], [0.22, 1, 0, 0], true, it);
+      push(mesh, rotFromDown(sourceDir(it)), it.pos, [0.82, 0.83, 0.85], [0.22, 1, 0, 0], false, it);
     } else if (it.kind === 'drain') {
       const R = m3.euler(it.rot[0], it.rot[1], it.rot[2]);
       push(cachedMesh(`d:${it.r.toFixed(4)}`, () => meshDrainRing(it.r)), R, it.pos, [0.7, 0.71, 0.73], [0.3, 1, 0, 0], false, it);

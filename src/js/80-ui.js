@@ -40,16 +40,34 @@ function restore(entry, waterToo) {
 function undo() {
   if (!undoStack.length) return;
   const from = current;
+  const to = undoStack.pop();
   redoStack.push(from);
-  restore(undoStack.pop(), from.reset);
-  toast('元に戻しました', 1200);
+  const what = from.reset ? 'シーンを開く前の状態' : describeChange(to.s, from.s);
+  restore(to, from.reset);
+  toast(from.reset ? `${what}に戻しました` : `${what}を元に戻しました`, 2200);
 }
 function redo() {
   if (!redoStack.length) return;
-  undoStack.push(current);
+  const from = current;
   const to = redoStack.pop();
+  undoStack.push(from);
+  const what = to.reset ? '開いたシーン' : describeChange(from.s, to.s);
   restore(to, to.reset);
-  toast('やり直しました', 1200);
+  toast(to.reset ? `${what}に戻しました` : `${what}をやり直しました`, 2200);
+}
+// a short name for what differs between two snapshots, for the undo and redo messages
+const FIELD_NAMES = { pos: '位置', rot: '回転', dims: '大きさ', r: '大きさ', name: '名前', color: '色', material: '素材', mode: '出し方', flow: '流量', speed: '勢い', dropD: '粒の直径', dropRate: '間隔', spread: '広がり', burst: '一度に出す量', burstEvery: '繰り返し', rainRate: '雨の強さ', rainSize: '降る範囲', total: '総量', enabled: '水を出す設定', pitch: '水の向き', yaw: '水の向き' };
+function describeChange(before, after) {
+  const A = JSON.parse(before), B = JSON.parse(after);
+  if (JSON.stringify(A.tank) !== JSON.stringify(B.tank)) return '水槽の大きさの変更';
+  const ia = new Map(A.items.map((i) => [i.id, i])), ib = new Map(B.items.map((i) => [i.id, i]));
+  for (const [id, it] of ib) if (!ia.has(id)) return `「${it.name}」の追加`;
+  for (const [id, it] of ia) if (!ib.has(id)) return `「${it.name}」の削除`;
+  for (const [id, b] of ib) {
+    const a = ia.get(id);
+    for (const k of Object.keys(b)) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return `「${b.name}」の${FIELD_NAMES[k] || '設定'}の変更`;
+  }
+  return '変更';
 }
 function updateUndoButtons() {
   document.querySelectorAll('[data-undo]').forEach((b) => { b.disabled = !undoStack.length; });
@@ -112,7 +130,7 @@ function viewMenu() {
     { label: '水源・水の塊などの目印', check: () => settings.guides, act: () => { settings.guides = !settings.guides; } },
     { label: '白い泡としぶき', check: () => settings.whitewater, act: () => { settings.whitewater = !settings.whitewater; } },
     { sep: true },
-    { grp: '計算の細かさ（細かいほど重くなります）' },
+    { grp: '計算の細かさ', sub: '細かいほど重くなります' },
     ...Object.entries(QUALITY).map(([k, q]) => ({ label: q.label, radio: () => settings.quality === k, act: () => setQuality(k) })),
     { sep: true },
     { grp: '視点' },
@@ -121,13 +139,15 @@ function viewMenu() {
     { label: '右から', key: '3', act: () => animateCamera({ ...VIEW_PRESETS.side, ...frameAll() }) },
     { label: '真上から', key: '7', act: () => animateCamera({ ...VIEW_PRESETS.top, ...frameAll() }) },
     { label: '選んだ物に寄る', key: '.', act: focusSelected },
+    { sep: true },
+    { label: '使い方を見る', act: showWelcome },
   ];
 }
 function buildMenu(dd, entries) {
   dd.innerHTML = '';
   for (const e of entries) {
     if (e.sep) { const s = document.createElement('div'); s.className = 'sep'; dd.appendChild(s); continue; }
-    if (e.grp) { const g = document.createElement('div'); g.className = 'grp'; g.textContent = e.grp; dd.appendChild(g); continue; }
+    if (e.grp) { const g = document.createElement('div'); g.className = 'grp'; g.textContent = e.grp; if (e.sub) { const t = document.createElement('span'); t.className = 'sub'; t.textContent = e.sub; g.appendChild(t); } dd.appendChild(g); continue; }
     const b = document.createElement('button');
     b.type = 'button';
     if (e.check) { b.className = 'check'; b.setAttribute('role', 'menuitemcheckbox'); b.setAttribute('aria-checked', String(!!e.check())); }
@@ -152,12 +172,14 @@ function openMenu(btn, dd, make, at) {
   el.hidden = false;
   $(btn).setAttribute('aria-expanded', 'true');
   if (at) { el.style.position = 'fixed'; el.style.left = at[0] + 'px'; el.style.top = at[1] + 'px'; }
+  // the visible width of the page (innerWidth can include content that sticks out on phones)
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
   const r = el.getBoundingClientRect();
-  const over = r.right - (window.innerWidth - 6);
+  const over = r.right - (vw - 6);
   if (over > 0) el.style.left = (at ? at[0] - over : parseFloat(getComputedStyle(el).left) - over) + 'px';
   const r2 = el.getBoundingClientRect();
   if (r2.left < 6) el.style.left = (parseFloat(el.style.left || '0') + 6 - r2.left) + 'px';
-  if (at && r2.bottom > window.innerHeight - 6) el.style.top = Math.max(6, at[1] - (r2.bottom - (window.innerHeight - 6))) + 'px';
+  if (at && r2.bottom > vh - 6) el.style.top = Math.max(6, at[1] - (r2.bottom - (vh - 6))) + 'px';
   const f = el.querySelector('button');
   if (f) f.focus({ preventScroll: true });
 }
@@ -167,7 +189,19 @@ for (const [btn, dd, make] of menus) {
     if ($(dd).hidden) openMenu(btn, dd, make); else closeMenus();
   });
 }
-document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.menu')) closeMenus(); });
+// a press outside an open menu only closes the menu (it does not also select or press what lies under it)
+let swallowClick = false;
+document.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.menu')) return;
+  const open = menus.some(([, d]) => !$(d).hidden);
+  if (!open) return;
+  closeMenus();
+  e.stopPropagation();
+  e.preventDefault();
+  swallowClick = true;
+}, true);
+document.addEventListener('click', (e) => { if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('pointerup', () => { setTimeout(() => { swallowClick = false; }, 400); }, true);
 
 // ---------- adding / removing ----------
 // a spot on the floor inside the tank, clear of other items and close to where the camera looks
@@ -192,6 +226,12 @@ function freeSpot(r, avoidBlocks) {
   return best;
 }
 function placeNew(it) {
+  const sel = selected();
+  if (it.kind === 'source' && sel && sel.kind !== 'source') {
+    // a source added while something is selected pours onto it
+    it.pos = clampItemPos(it, [sel.pos[0], Math.min(scene.tank.h + 0.08, 0.5), sel.pos[2]]);
+    return sel;
+  }
   const [x, z] = freeSpot(footprint(it), it.kind === 'block');
   if (it.kind === 'obstacle') { it.pos = [x, 0.3, z]; it.pos[1] += -obstacleBottom(it) + 0.0005; }
   else if (it.kind === 'source') it.pos = [x, Math.min(scene.tank.h + 0.08, 0.5), z];
@@ -205,7 +245,7 @@ function uniqueName(base) {
   for (let n = 2; ; n++) if (!used.has(`${root} ${n}`)) return `${root} ${n}`;
 }
 function addItem(it) {
-  placeNew(it);
+  const over = placeNew(it);
   it.name = uniqueName(it.name);
   scene.items.push(it);
   if (sim) sim.setObjects(scene.items, 0);
@@ -213,7 +253,7 @@ function addItem(it) {
   select(it.id, { reveal: true });
   pushUndo();
   sceneChanged(true);
-  toast(it.kind === 'block' ? `「${it.name}」を追加して水を入れました` : `「${it.name}」を追加しました`, 2000);
+  toast(it.kind === 'block' ? `「${it.name}」を追加して水を入れました` : over ? `「${it.name}」を「${over.name}」の上に追加しました` : `「${it.name}」を追加しました`, 2400);
 }
 function deleteSelected() {
   const it = selected();
@@ -373,14 +413,16 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
     if (Number.isFinite(lo) && Number.isFinite(hi)) el.title = `${label || ''}：${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''}`;
     if (fill) el.querySelector('.fill').style.width = `${clamp((v - fill[0]) / (fill[1] - fill[0]), 0, 1) * 100}%`;
   };
-  // typed values outside the range are brought into it, and the range is shown
+  // typed values outside the range are brought into it, and the range is shown under the field
   const apply = (v, typed) => {
     const [lo, hi] = lim();
     const c = clamp(v, lo, hi);
     set(c);
     render();
-    if (typed && Math.abs(c - v) > 1e-9) toast(`「${label}」は ${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''} の範囲です`, 2600);
+    if (typed && Math.abs(c - v) > 1e-9) fieldMessage(el, `「${label}」は ${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''} の範囲なので、${fmt(c)} にしました`);
   };
+  // with a bar, the bar's end follows the pointer; without one, 4 px make one step
+  const perPx = () => (fill ? (fill[1] - fill[0]) / Math.max(el.clientWidth, 40) : step / scale / 4);
   let start = null;
   el.addEventListener('pointerdown', (e) => {
     if (el.querySelector('input') || e.button > 0) return;
@@ -401,7 +443,7 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
       return;
     }
     const k = e.shiftKey ? 0.1 : 1;
-    let v = start.v + ((e.clientX - start.x) / 4) * (step / scale) * k;
+    let v = start.v + (e.clientX - start.x) * perPx() * k;
     if (e.ctrlKey) v = Math.round(v / (step / scale * 10)) * (step / scale * 10);
     apply(v, false);
   });
@@ -411,7 +453,14 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
     start = null;
     el.classList.remove('focus');
     if (s.moved) pushUndo();
-    else if (!s.touch || (Math.hypot(e.clientX - s.x, e.clientY - s.y) < 10 && performance.now() - s.t < 700)) edit('');
+    else if (!s.touch) edit('');
+    else if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < 10 && performance.now() - s.t < 700) {
+      // a finger on the bar sets the value there; on the number it opens the keyboard
+      const r = el.getBoundingClientRect();
+      const f = (e.clientX - r.left) / r.width;
+      if (fill && f < 0.5) { apply(fill[0] + f * (fill[1] - fill[0]), false); pushUndo(); }
+      else edit('');
+    }
   });
   el.addEventListener('pointercancel', () => { start = null; el.classList.remove('focus'); });
   function edit(initial) {
@@ -461,6 +510,15 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
   el.refresh = render;
   numberFields.set(el, { edit });
   return el;
+}
+// a short note under a field, removed after a while
+function fieldMessage(field, text) {
+  const host = field.closest('.prow') || field.closest('.pgroup') || field;
+  let msg = host.nextElementSibling;
+  if (!msg || !msg.classList.contains('field-msg')) { msg = document.createElement('p'); msg.className = 'note field-msg'; msg.setAttribute('role', 'status'); host.after(msg); }
+  msg.textContent = text;
+  clearTimeout(msg.timer);
+  msg.timer = setTimeout(() => msg.remove(), 6000);
 }
 function row(labelText, control, small) {
   const r = document.createElement('div');
@@ -570,7 +628,7 @@ function buildProps() {
       group('計算の細かさ', segmented(Object.entries(QUALITY).map(([k, q]) => [k, q.label]), () => settings.quality, setQuality, '計算の細かさ'),
         noteEl('細かいほど細い水流や小さなしぶきまで表せますが、動きは重くなります。')),
       noteEl('大きさや計算の細かさを変えると、水は最初の状態から計算し直します。'),
-      actions([['水を最初の状態に戻す', () => resetSim()], ['水をすべて消す', clearAllWater, 'danger', true]]),
+      actions([['水を最初の状態に戻す', () => resetSim()], ['水をすべて消す', clearAllWater, 'danger']]),
       details('計算の詳細', `格子 ${sim.nx} × ${sim.ny} × ${sim.nz}（1 マス ${(sim.h * 1000).toFixed(1)} mm）<br>水の粒の上限 ${sim.cap.toLocaleString('ja-JP')} 個（${(sim.cap * sim.vp * 1000).toFixed(1)} L 分）`),
     );
     return;
@@ -615,14 +673,17 @@ function buildProps() {
     const amount = [];
     const F = (lbl, key, o) => row(lbl, numberField({ label: lbl, get: () => it[key], set: (v) => { it[key] = v; liveRefresh(); }, ...o }));
     if (it.mode === 'stream' || it.mode === 'shower') {
+      if (it.mode === 'stream') {
+        const quick = [['ちょろちょろ', 0.6, 0.35], ['ふつう', 4, 0.7], ['勢いよく', 12, 1.6]];
+        amount.push(row('目安', actions(quick.map(([lbl, f, v]) => [lbl, () => { it.flow = f; it.speed = v; pushUndo(); refreshPanels(); }]))));
+      }
       amount.push(F('流量', 'flow', { unit: 'L/分', digits: 2, step: 0.05, min: 0.05, max: 40, fill: [0, 10] }));
       amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0.05, max: 12, fill: [0, 4] }));
       if (it.mode === 'stream') {
         // the outlet diameter follows from flow and speed; setting it keeps the speed and changes the flow
-        amount.push(row('出口の太さ', numberField({ unit: 'mm', scale: 1000, digits: 1, step: 0.1, label: '出口の太さ', get: () => sourceNozzle(it), set: (d) => { it.flow = clamp((Math.PI * d * d / 4) * Math.max(it.speed, 0.05) * 60000, 0.05, 40); liveRefresh(); }, min: 0.001, max: 0.12 })));
         const n = noteEl('');
         n.dataset.live = 'nozzle';
-        amount.push(n);
+        amount.push(foldout('出口の太さ', [row('太さ', numberField({ unit: 'mm', scale: 1000, digits: 1, step: 0.1, label: '出口の太さ', get: () => sourceNozzle(it), set: (d) => { it.flow = clamp((Math.PI * d * d / 4) * Math.max(it.speed, 0.05) * 60000, 0.05, 40); liveRefresh(); }, min: 0.001, max: 0.12 })), n]));
       } else amount.push(F('広がり', 'spread', { unit: '°', digits: 0, step: 1, min: 0, max: 80 }));
     } else if (it.mode === 'drops') {
       amount.push(F('粒の直径', 'dropD', { unit: 'mm', digits: 1, step: 0.1, min: 1, max: 40, fill: [1, 15] }));
@@ -673,6 +734,17 @@ function buildProps() {
   liveRefresh();
 }
 function noteEl(html) { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = html; return p; }
+function foldout(summary, children) {
+  const d = document.createElement('details');
+  d.className = 'more';
+  const sm = document.createElement('summary');
+  sm.textContent = summary;
+  const box = document.createElement('div');
+  box.className = 'pgroup';
+  box.append(...children);
+  d.append(sm, box);
+  return d;
+}
 function details(summary, html) {
   const d = document.createElement('details');
   d.className = 'more';
@@ -729,7 +801,11 @@ function fireBurst(it) {
   st.fired = true;
   st.timer = it.burstEvery > 0 ? it.burstEvery : 0;
 }
-function clearAllWater() { sim.clearWater(); toast('水槽の水をすべて消しました', 1800); }
+function clearAllWater() {
+  sim.saveWater();
+  sim.clearWater();
+  toast('水槽の水をすべて消しました', 5000, { label: '元に戻す', run: restoreWaterNow });
+}
 function setQuality(k) {
   if (settings.quality === k) return;
   settings.quality = k;
@@ -750,9 +826,9 @@ function liveRefresh() {
   if (it.kind !== 'source') return;
   const minD = sim ? sim.h * 0.5 : 0.004;
   const nz = $('props').querySelector('[data-live="nozzle"]');
-  if (nz) nz.innerHTML = sourceNozzle(it) < minD
+  if (nz) nz.innerHTML = (sourceNozzle(it) < minD
     ? `いまの計算の細かさでは、約 ${(minD * 1000).toFixed(0)} mm より細い水流は粒の列になります（表示メニューの「計算の細かさ」を上げると細くできます）。`
-    : '流量と勢いから決まります。太さを変えると、勢いはそのままで流量が変わります。';
+    : '') + '流量と勢いで決まる太さです。ここで太さを変えると、勢いはそのままで流量が変わります。';
   const dr = $('props').querySelector('[data-live="drop"]');
   if (dr) dr.innerHTML = `1 秒に ${it.dropRate.toFixed(it.dropRate < 10 ? 1 : 0)} 粒`;
   const em = $('props').querySelector('[data-live="emitted"]');
@@ -852,19 +928,61 @@ document.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('clic
 }));
 
 // ---------- settings sheet on narrow screens ----------
+// The sheet sits between the view and the transport. Its top bar can be dragged to any height, flicked down to
+// close; the arrow button switches between the usual and the tall height.
 const sheet = { auto: false };
 function openSheet(tab) {
   setSheetTab(tab || $('side').dataset.tab);
-  if (!$('side').classList.contains('open')) sheet.auto = true;
+  const wasOpen = $('side').classList.contains('open');
+  if (!wasOpen) sheet.auto = true;
   $('side').classList.add('open');
   $('btn-side').setAttribute('aria-expanded', 'true');
+  // once the view has shrunk, bring the selected item back into it if it fell outside
+  if (!wasOpen) setTimeout(keepSelectionInView, 200);
 }
 function closeSheet() {
   $('side').classList.remove('open', 'tall');
+  $('side').style.height = '';
   $('btn-side').setAttribute('aria-expanded', 'false');
   sheet.auto = false;
   updateSheetSizeButton();
 }
+function keepSelectionInView() {
+  const it = selected();
+  if (!it) return;
+  const p = project(it.pos);
+  if (p.ok && p.x > cssW * 0.12 && p.x < cssW * 0.88 && p.y > cssH * 0.15 && p.y < cssH * 0.85) return;
+  animateCamera({ target: [it.pos[0], clamp(it.pos[1], 0.02, scene.tank.h), it.pos[2]] });
+}
+(() => {
+  // the whole bar, tabs included, can be dragged; a press that does not move still works as a tap on the tab
+  const head = document.querySelector('.sheet-head');
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#btn-side-size, #btn-side-close')) return;
+    const side = $('side');
+    const h0 = side.getBoundingClientRect().height, y0 = e.clientY, t0 = performance.now();
+    const maxH = document.documentElement.clientHeight - 250;
+    let dragging = false;
+    const move = (ev) => {
+      if (!dragging) {
+        if (Math.abs(ev.clientY - y0) < 8) return;
+        dragging = true;
+        head.setPointerCapture(ev.pointerId);
+      }
+      side.classList.remove('tall');
+      side.style.height = clamp(h0 - (ev.clientY - y0), 60, maxH) + 'px';
+    };
+    const up = (ev) => {
+      head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up);
+      if (!dragging) return;
+      swallowClick = true;
+      const dy = ev.clientY - y0, fast = dy / Math.max(performance.now() - t0, 1) > 0.6;
+      if (h0 - dy < 140 || (fast && dy > 40)) closeSheet();
+      updateSheetSizeButton();
+    };
+    head.addEventListener('pointermove', move); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+  });
+})();
 function setSheetTab(tab) {
   $('side').dataset.tab = tab;
   document.querySelectorAll('.sheet-head [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
@@ -878,7 +996,7 @@ function updateSheetSizeButton() {
 }
 $('btn-side').addEventListener('click', () => { if ($('side').classList.contains('open')) closeSheet(); else { openSheet(); sheet.auto = false; } });
 $('btn-side-close').addEventListener('click', closeSheet);
-$('btn-side-size').addEventListener('click', () => { $('side').classList.toggle('tall'); sheet.auto = false; updateSheetSizeButton(); });
+$('btn-side-size').addEventListener('click', () => { $('side').style.height = ''; $('side').classList.toggle('tall'); sheet.auto = false; updateSheetSizeButton(); });
 document.querySelectorAll('.sheet-head [data-tab]').forEach((b) => b.addEventListener('click', () => setSheetTab(b.dataset.tab)));
 
 // the boundary between the scene list and the settings can be dragged on wide screens
@@ -910,12 +1028,12 @@ function updateHint() {
     const note = toolNote(editor.tool, it);
     let what;
     if (note) what = note;
-    else if (editor.tool === 'move') what = it.kind === 'block' ? '矢印や中央の丸をドラッグで移動' : '矢印をドラッグでその向きに移動・本体をドラッグで床に沿って移動（<kbd>Shift</kbd> で上下）';
+    else if (editor.tool === 'move') what = it.kind === 'block' ? '矢印の先の丸をドラッグでその向きに移動' : '本体か中央の白い丸をドラッグで床に沿って移動（<kbd>Shift</kbd> で上下）・矢印の先の丸でその向きに移動';
     else if (editor.tool === 'rotate') what = it.kind === 'source' ? '橙の丸をドラッグで水の向きを変える・本体をドラッグで水平に回す' : '輪をドラッグで回転・本体をドラッグで水平に回す';
     else what = '四角をドラッグでその向きの大きさ・中央の四角か本体をドラッグで全体の大きさ';
     h = `${what}　<kbd>G</kbd> 移動 <kbd>R</kbd> 回転 <kbd>S</kbd> 大きさ <kbd>X</kbd> 削除 <kbd>Shift</kbd>+<kbd>D</kbd> 複製`;
   } else if (editor.panMode) {
-    h = 'ドラッグで平行移動しています（右上の十字のボタンで回転に戻ります）';
+    h = 'ドラッグで平行移動しています（右上の手のボタンをもう一度押すと回転に戻ります）';
   } else {
     h = '空いた所をドラッグで視点を回す・<kbd>Shift</kbd>+ドラッグで平行移動・ホイール（トラックパッドは2本指の上下）で拡大　物をクリックで選択　<kbd>Shift</kbd>+<kbd>A</kbd> で追加';
   }
@@ -932,7 +1050,7 @@ function confirmDelete() {
   const at = lastPointer ? clientFromLocal(lastPointer) : null;
   closeMenus();
   const dd = $('dd-add');
-  buildMenu(dd, [{ grp: `「${it.name}」を削除しますか？` }, { label: '削除', act: deleteSelected }]);
+  buildMenu(dd, [{ grp: `「${it.name}」を削除しますか？` }, { label: '削除する', act: deleteSelected }, { label: 'やめる', act: () => {} }]);
   dd.hidden = false;
   if (at) { dd.style.position = 'fixed'; dd.style.left = at[0] + 'px'; dd.style.top = at[1] + 'px'; }
   dd.querySelector('button').focus({ preventScroll: true });
@@ -1015,14 +1133,16 @@ function showWelcome() {
     '<b>1本指でなぞる</b>と視点が回り、<b>2本指</b>で拡大・平行移動できます。',
     '<b>物や水源をタップ</b>すると、下に出る「設定」で水の量や勢い、大きさを変えられます。',
     '選んだ物の<b>矢印や輪をなぞる</b>と、動かしたり回したりできます。',
-    '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。',
+    '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。この案内は「表示」メニューからもう一度見られます。',
   ] : [
     '<b>空いた所をドラッグ</b>すると視点が回ります（Shift+ドラッグで平行移動、ホイールで拡大）。',
     '<b>物や水源をクリック</b>すると、右の欄で水の量や勢い、大きさを変えられます。',
-    '選んだ物の<b>矢印や輪をドラッグ</b>すると、動かしたり回したりできます。Blender と同じ G・R・S キーも使えます。',
+    '選んだ物の<b>本体や矢印をドラッグ</b>すると、動かしたり回したりできます。',
     '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。',
   ];
+  steps.push('下の<b>再生</b>で水が流れ、<b>最初から</b>で水を最初の状態に戻せます。');
   $('welcome-steps').innerHTML = steps.map((s) => `<li>${s}</li>`).join('');
+  $('welcome-extra').textContent = isCoarse ? '' : 'Blender と同じキー操作（G・R・S、Shift+A など）にも対応しています。この案内は「表示」メニューの「使い方を見る」でもう一度見られます。';
   $('welcome').hidden = false;
   $('welcome-ok').focus({ preventScroll: true });
 }

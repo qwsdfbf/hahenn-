@@ -12,11 +12,13 @@ function rebuildSim(refill) {
 }
 // water and time back to the start: the water blocks are filled again, sources start over
 function resetSim(quiet) {
+  if (!quiet) sim.saveWater();
   sim.clearWater();
   sim.setObjects(scene.items, 0);
   sim.emitNow(blockEmits(sim));
-  if (!quiet) toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 2000);
+  if (!quiet) toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 5000, { label: '元に戻す', run: restoreWaterNow });
 }
+function restoreWaterNow() { if (sim.restoreWater()) toast('水を戻しました', 1400); }
 
 // ---------- sizing ----------
 let resizePending = true;

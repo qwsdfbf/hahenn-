@@ -130,6 +130,9 @@ function toast(msg, ms = 2600, action = null) {
   b.textContent = action ? action.label : '';
   b.onclick = action ? () => { t.classList.remove('show'); action.run(); } : null;
   t.classList.toggle('has-act', !!action);
+  // on narrow screens the message sits at the bottom of the 3D view, above the sheet and the transport
+  const v = $('view').getBoundingClientRect();
+  t.style.setProperty('--toast-bottom', `${Math.max(window.innerHeight - v.bottom + 12, 12)}px`);
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), action ? Math.max(ms, 5000) : ms);

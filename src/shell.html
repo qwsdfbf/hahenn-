@@ -30,7 +30,7 @@
 }
 @media (pointer: coarse) { :root { --ctl: 44px; } }
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: pan-x pan-y; }
 body {
   margin: 0; overflow: hidden;
   background: var(--bg); color: var(--text);
@@ -40,7 +40,7 @@ body {
 }
 button { font: inherit; color: inherit; }
 .app {
-  height: 100%;
+  height: 100%; overflow: hidden;
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr) 320px;
   grid-template-rows: 44px minmax(0, 1fr) 50px;
@@ -70,13 +70,14 @@ header.head {
 .ibtn:disabled, .mbtn:disabled { opacity: 0.35; cursor: default; background: transparent; }
 .dropdown {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
-  min-width: 230px; max-height: calc(100vh - 70px); overflow-y: auto; padding: 6px;
+  min-width: min(230px, calc(100vw - 12px)); max-width: calc(100vw - 12px); max-height: calc(100vh - 70px); overflow-y: auto; padding: 6px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
   display: grid; gap: 1px;
 }
 .dropdown[hidden] { display: none; }
 .dropdown .grp { padding: 6px 8px 3px; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
+.dropdown .grp .sub { display: block; letter-spacing: 0; font-size: 11.5px; }
 .dropdown button {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--ctl);
   padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer;
@@ -149,7 +150,7 @@ nav.tools .sep { width: 30px; height: 1px; background: var(--line); margin: 4px 
 
 aside.side {
   grid-area: side; min-height: 0;
-  display: grid; grid-template-rows: minmax(96px, 28%) 6px minmax(0, 1fr);
+  display: grid; grid-template-rows: fit-content(45%) 6px minmax(0, 1fr);
   background: var(--panel); border-left: 1px solid var(--line);
 }
 .split { cursor: row-resize; touch-action: none; background: var(--line-soft); border-top: 1px solid var(--line); }
@@ -162,11 +163,12 @@ aside.side {
   border-bottom: 1px solid var(--line-soft);
 }
 .sec-head .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sec-head .acts { display: flex; gap: 2px; flex: none; }
+.sec-head .acts { display: flex; gap: 6px; flex: none; }
 .sec-head .acts button { height: 28px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 .sec-head .acts button:hover { border-color: var(--line); }
 .sec-head .acts button.danger { color: #ffb4ae; }
 .sec-head .acts svg { width: 14px; height: 14px; }
+@media (pointer: coarse) { .sec-head .acts { gap: 14px; } .sec-head .acts button { min-height: 44px; padding: 0 12px; } }
 .scroll {
   overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-width: thin;
   background:
@@ -202,7 +204,8 @@ aside.side {
 }
 .nf:hover { border-color: var(--line); }
 .nf:focus-within, .nf.focus { border-color: var(--accent); }
-.nf .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(242,164,58,0.16); pointer-events: none; }
+.nf .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(242,164,58,0.18); pointer-events: none; }
+.nf .fill::after { content: ""; position: absolute; right: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; background: var(--accent); }
 .nf .ax { position: relative; padding-left: 7px; font: 600 12px var(--font-data); }
 .nf .ax.x { color: #ef7471; } .nf .ax.y { color: #93d673; } .nf .ax.z { color: #6fa8f2; }
 .nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
@@ -231,7 +234,12 @@ aside.side {
 .note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 .note b { color: var(--text); font-weight: 500; font-family: var(--font-data); }
 details.more { font-size: 12.5px; color: var(--muted); }
-details.more summary { cursor: pointer; min-height: var(--ctl); display: flex; align-items: center; }
+details.more summary { cursor: pointer; min-height: var(--ctl); display: flex; align-items: center; gap: 6px; list-style: none; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.15s; }
+details.more[open] summary::before { transform: rotate(90deg); }
+details.more > .pgroup { padding-top: 4px; }
+.field-msg { color: #ffd9a3; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn {
   min-height: var(--ctl); padding: 0 12px; border-radius: 6px; border: 1px solid var(--line);
@@ -250,9 +258,9 @@ footer.time {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--panel); border-top: 1px solid var(--line);
 }
-#btn-reset { margin-right: 6px; }
+#btn-reset { margin-left: 14px; width: auto; padding: 0 10px; gap: 6px; }
 .play {
-  height: 34px; width: 104px; padding: 0 12px; border-radius: 6px; border: 0; flex: none;
+  height: 34px; width: 104px; padding: 0 10px; border-radius: 6px; border: 0; flex: none; white-space: nowrap;
   background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
@@ -261,7 +269,7 @@ footer.time {
 .speeds .lbl { color: var(--muted); font-size: 12.5px; margin-right: 2px; }
 .speeds button { height: 30px; min-width: 44px; padding: 0 8px; border-radius: 5px; border: 1px solid var(--line-soft); background: var(--field); cursor: pointer; font: 12.5px var(--font-data); white-space: nowrap; }
 .speeds button:first-of-type { font-family: var(--font-body); }
-.speeds button[aria-checked="true"] { background: var(--panel-2); border-color: var(--accent); color: #ffd9a3; }
+.speeds button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .tinfo { margin-left: auto; display: flex; gap: 18px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .tinfo b { color: var(--text); font: 500 13px var(--font-data); font-variant-numeric: tabular-nums; }
 .tinfo .cap { font-size: 12px; }
@@ -292,6 +300,7 @@ footer.time {
 .welcome p { margin: 0; color: var(--muted); }
 .welcome ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .welcome li b { color: #ffd9a3; font-weight: 600; }
+.welcome .extra { font-size: 12.5px; }
 .welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .welcome.textbox { position: fixed; z-index: 60; }
 .welcome textarea { width: 100%; min-height: 10em; resize: vertical; border-radius: 6px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: 12px/1.4 var(--font-data); padding: 8px; }
@@ -317,16 +326,18 @@ footer.time {
   .narrow-only { display: flex !important; }
   .mbtn { padding: 0 8px; }
   nav.tools { flex-direction: row; justify-content: center; gap: 2px; padding: 3px 6px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
-  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 10.5px; white-space: nowrap; }
+  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 11px; white-space: nowrap; }
   nav.tools .sep { width: 1px; height: 30px; margin: 0 3px; }
   aside.side {
-    height: min(46vh, 400px, calc(100vh - 380px));
-    height: min(46dvh, 400px, calc(100dvh - 380px));
+    height: min(36vh, 330px, calc(100vh - 380px));
+    height: min(36dvh, 330px, calc(100dvh - 380px));
     grid-template-rows: auto minmax(0, 1fr);
     border-left: 0; border-top: 1px solid var(--line);
     padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
   }
-  aside.side.tall { height: min(72vh, 640px, calc(100vh - 250px)); height: min(72dvh, 640px, calc(100dvh - 250px)); }
+  aside.side.tall { height: min(62vh, 560px, calc(100vh - 250px)); height: min(62dvh, 560px, calc(100dvh - 250px)); }
+  .sheet-head { touch-action: none; cursor: ns-resize; position: relative; padding-top: 10px !important; }
+  .sheet-head::before { content: ""; position: absolute; left: 50%; top: 4px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
   .prow > .lbl { font-size: 13.5px; }
   .pgroup > h3 { font-size: 13px; }
   .note, details.more { font-size: 13px; }
@@ -344,27 +355,29 @@ footer.time {
   .drawer-btn { display: inline-flex; }
   .drawer-btn[aria-expanded="true"] { background: var(--panel-2); }
   footer.time { gap: 4px; padding-inline: 8px; }
-  #btn-reset { margin-right: 4px; }
-  .play { width: 92px; height: 40px; }
+  #btn-reset { margin-left: 6px; padding: 0; width: var(--ctl); }
+  #btn-reset .lbl { display: none; }
+  .play { width: 92px; height: 40px; padding: 0 6px; font-size: 13px; gap: 4px; }
   .speeds { margin-left: auto; gap: 3px; }
   .speeds .lbl { display: none; }
-  .speeds button { height: 40px; min-width: 42px; padding: 0 6px; }
+  .speeds button { height: 40px; min-width: 40px; padding: 0 5px; }
   .tinfo { display: none; }
   .view-info {
     display: flex; gap: 10px; position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 6px;
     background: rgba(16,19,22,0.78); font-size: 12.5px; color: var(--muted); pointer-events: none;
   }
-  .view-info b { color: var(--text); font: 500 12.5px var(--font-data); }
+  .view-info { font-size: 13px; }
+  .view-info b { color: var(--text); font: 500 13px var(--font-data); }
   .view-status { top: 40px; left: 8px; max-width: calc(100% - 110px); }
   .view-hint { display: none; }
   .navball { width: 70px; height: 70px; }
   .navbtns button { width: 40px; height: 40px; }
-  .toast { top: 110px; }
+  .toast { top: auto; bottom: var(--toast-bottom, 64px); }
 }
 @media (max-width: 380px) {
   .brand { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .toast, .toggle .sw, .toggle .sw::after { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .toast, .toggle .sw, .toggle .sw::after, details.more summary::before { transition: none; } }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 </head>
@@ -398,7 +411,7 @@ footer.time {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 4l3 3-3 3"/><path d="M13.5 7h-7a4 4 0 0 0 0 8h2"/></svg>やり直す
     </button>
     <button class="mbtn drawer-btn" id="btn-side" aria-controls="side" aria-expanded="false">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>設定
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.6"/><circle cx="6" cy="11.5" r="1.6"/></svg>設定
     </button>
   </header>
 
@@ -445,7 +458,7 @@ footer.time {
           <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 9h10"/></svg>
         </button>
         <button id="nav-pan" title="押すと、ドラッグで視点を平行移動するようになります" aria-label="平行移動" aria-pressed="false">
-          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v14M2 9h14M9 2L7 4M9 2l2 2M9 16l-2-2M9 16l2-2M2 9l2-2M2 9l2 2M16 9l-2-2M16 9l-2 2"/></svg>
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5V4.2a1.1 1.1 0 0 1 2.2 0V8M8.2 7.5V3.2a1.1 1.1 0 0 1 2.2 0V8M10.4 7.8V4.4a1.1 1.1 0 0 1 2.2 0V9.5M12.6 8.2a1.1 1.1 0 0 1 2.2 0v2.6a5 5 0 0 1-5 5H9a4.2 4.2 0 0 1-3.5-1.9L3.4 11a1.2 1.2 0 0 1 1.9-1.5L6 10.5"/></svg>
         </button>
         <button id="nav-home" title="全体を表示" aria-label="全体を表示">
           <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 8.5L9 3l6 5.5"/><path d="M4.8 7.2v7.3h8.4V7.2"/></svg>
@@ -458,6 +471,7 @@ footer.time {
         <h2 id="welcome-title">水理ラボ</h2>
         <p>水槽に物と水源を置いて、水の流れ方を試せます。</p>
         <ol id="welcome-steps"></ol>
+        <p class="extra" id="welcome-extra"></p>
         <button class="btn" id="welcome-ok" type="button">はじめる</button>
       </div>
     </div>
@@ -488,9 +502,6 @@ footer.time {
   </aside>
 
   <footer class="time">
-    <button class="ibtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま）" aria-label="水を最初の状態に戻す">
-      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2.5" y="3" width="2" height="10" rx="0.6"/><path d="M13.5 3.4v9.2a.5.5 0 0 1-.8.4L6 8.4a.5.5 0 0 1 0-.8l6.7-4.6a.5.5 0 0 1 .8.4z"/></svg>
-    </button>
     <button class="play" id="btn-play" aria-pressed="false" title="再生・一時停止（Space）">
       <svg viewBox="0 0 16 16" fill="currentColor" id="ico-play"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg><span id="lbl-play">一時停止</span>
     </button>
@@ -504,6 +515,9 @@ footer.time {
       <button role="radio" data-speed="0.1" aria-checked="false" aria-label="10分の1の速さ">1/10</button>
       <button role="radio" data-speed="0.025" aria-checked="false" aria-label="40分の1の速さ">1/40</button>
     </div>
+    <button class="ibtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま、Shift+←）" aria-label="最初から（水と時間を最初の状態に戻す）">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2.5" y="3" width="2" height="10" rx="0.6"/><path d="M13.5 3.4v9.2a.5.5 0 0 1-.8.4L6 8.4a.5.5 0 0 1 0-.8l6.7-4.6a.5.5 0 0 1 .8.4z"/></svg><span class="lbl">最初から</span>
+    </button>
     <div class="tinfo">
       <span>時間 <b data-info="time">0.00 s</b></span>
       <span>水槽の水 <b data-info="water">0.00 L</b> <span class="cap" data-info="cap"></span></span>

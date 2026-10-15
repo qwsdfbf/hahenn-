@@ -153,7 +153,7 @@ class RippleLayer {
     const M2 = this.M * this.M;
     this.u = gbuf(64, BU.UNIFORM | D, 'rippleU');
     this.src = gbuf((R + 1) * (R + 1) * 4, S | D, 'rippleSrc');
-    this.state = gbuf(M2 * 8, S | D, 'rippleState');
+    this.state = gbuf(M2 * 8, S | D | BU.COPY_SRC, 'rippleState');
     this.a = gbuf(M2 * 8, S, 'rippleA');
     this.b = gbuf(M2 * 8, S, 'rippleB');
     this.hat = gbuf(M2 * 8, S, 'rippleHat');
