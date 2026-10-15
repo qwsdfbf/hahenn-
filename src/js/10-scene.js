@@ -211,9 +211,30 @@ function obstacleBottom(o) {
 function posLimits(it) {
   const t = scene.tank;
   let lo = 0;
+  let ex = 0, ez = 0;
   if (it.kind === 'block') lo = it.dims.h / 2;
   else if (it.kind === 'source') lo = 0.01;
-  return [[-t.w / 2, t.w / 2], [lo, t.h + 0.4], [-t.d / 2, t.d / 2]];
+  else if (it.kind === 'obstacle') [ex, , ez] = obstacleExtent(it);
+  else if (it.kind === 'drain') ex = ez = it.r;
+  // a shape wider than the tank stays centred
+  const span = (half, e) => (e < half ? [-half + e, half - e] : [0, 0]);
+  return [span(t.w / 2, ex), [lo, t.h + 0.4], span(t.d / 2, ez)];
+}
+// half extents of an obstacle's bounding box in world axes
+function obstacleExtent(o) {
+  const d = o.dims;
+  let e;
+  switch (o.shape) {
+    case 'box': case 'container': e = [d.w / 2, d.h / 2, d.d / 2]; break;
+    case 'plate': e = [d.w / 2, d.t / 2, d.d / 2]; break;
+    case 'sphere': e = [d.r, d.r, d.r]; break;
+    case 'cylinder': case 'cone': case 'cup': e = [d.r, d.h / 2, d.r]; break;
+    case 'torus': e = [d.R + d.r, d.r, d.R + d.r]; break;
+    case 'gutter': e = [d.len / 2, d.r + d.t, d.r + d.t]; break;
+    default: e = [0.05, 0.05, 0.05];
+  }
+  const R = obstacleRot(o);
+  return [0, 1, 2].map((i) => Math.abs(R[i * 3]) * e[0] + Math.abs(R[i * 3 + 1]) * e[1] + Math.abs(R[i * 3 + 2]) * e[2]);
 }
 function clampItemPos(it, p) {
   const L = posLimits(it);

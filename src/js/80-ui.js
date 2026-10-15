@@ -116,9 +116,9 @@ function addMenu() {
 function fileMenu() {
   return [
     { label: '新規（空の水槽）', act: newScene },
-    { label: 'ファイルを開く…', act: openFile },
+    { label: 'ファイルを開く…', key: 'Ctrl+O', act: openFile },
     // pages hosted where downloads are blocked hand the scene over as text instead of a file
-    window.__noDownloads ? { label: 'シーンをコピー（JSON）', act: copyScene } : { label: 'ファイルに保存', act: saveFile },
+    window.__noDownloads ? { label: 'シーンをコピー（JSON）', key: 'Ctrl+S', act: copyScene } : { label: 'ファイルに保存', key: 'Ctrl+S', act: saveFile },
     { sep: true },
     { grp: 'サンプル' },
     ...PRESETS.map((p) => ({ label: p.label, act: () => loadPreset(p) })),
@@ -141,6 +141,7 @@ function viewMenu() {
     { label: '選んだ物に寄る', key: '.', act: focusSelected },
     { sep: true },
     { label: '使い方を見る', act: showWelcome },
+    { label: 'キー操作の一覧', key: '?', act: showKeys },
   ];
 }
 function buildMenu(dd, entries) {
@@ -164,14 +165,26 @@ const menus = [['m-file', 'dd-file', fileMenu], ['m-add', 'dd-add', addMenu], ['
 function closeMenus() {
   for (const [b, d] of menus) { const dd = $(d); dd.hidden = true; dd.style.cssText = ''; $(b).setAttribute('aria-expanded', 'false'); }
 }
-// opens a menu under its button, or at a point on the screen (Shift+A at the pointer); always kept inside the window
-function openMenu(btn, dd, make, at) {
+// opens a menu under its button, or at a point on the screen (Shift+A at the pointer); always kept inside the window.
+// `placeHere`: what gets added from this menu goes on the floor under that point.
+let pendingPlace = null;
+function openMenu(btn, dd, make, at, placeHere) {
   closeMenus();
+  pendingPlace = null;
+  if (placeHere && lastPointer) {
+    const hit = rayPlane(rayAt(lastPointer[0], lastPointer[1]), [0, 0, 0], [0, 1, 0]);
+    if (hit) pendingPlace = [hit[0], hit[2]];
+  }
   const el = $(dd);
   buildMenu(el, make());
   el.hidden = false;
   $(btn).setAttribute('aria-expanded', 'true');
   if (at) { el.style.position = 'fixed'; el.style.left = at[0] + 'px'; el.style.top = at[1] + 'px'; }
+  fitMenu(el, at);
+  const f = el.querySelector('button');
+  if (f) f.focus({ preventScroll: true });
+}
+function fitMenu(el, at) {
   // the visible width of the page (innerWidth can include content that sticks out on phones)
   const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
   const r = el.getBoundingClientRect();
@@ -180,15 +193,26 @@ function openMenu(btn, dd, make, at) {
   const r2 = el.getBoundingClientRect();
   if (r2.left < 6) el.style.left = (parseFloat(el.style.left || '0') + 6 - r2.left) + 'px';
   if (at && r2.bottom > vh - 6) el.style.top = Math.max(6, at[1] - (r2.bottom - (vh - 6))) + 'px';
-  const f = el.querySelector('button');
-  if (f) f.focus({ preventScroll: true });
 }
+// arrow keys move through the open menu
+document.querySelectorAll('.dropdown').forEach((dd) => dd.addEventListener('keydown', (e) => {
+  const items = [...dd.querySelectorAll('button')];
+  const i = items.indexOf(document.activeElement);
+  let j = -1;
+  if (e.key === 'ArrowDown') j = (i + 1) % items.length;
+  else if (e.key === 'ArrowUp') j = (i - 1 + items.length) % items.length;
+  else if (e.key === 'Home') j = 0;
+  else if (e.key === 'End') j = items.length - 1;
+  if (j >= 0) { e.preventDefault(); e.stopPropagation(); items[j].focus(); }
+}));
 for (const [btn, dd, make] of menus) {
   $(btn).addEventListener('click', (e) => {
     e.stopPropagation();
     if ($(dd).hidden) openMenu(btn, dd, make); else closeMenus();
   });
 }
+// a press anywhere outside the 3D view while G / R / S runs finishes that operation first
+document.addEventListener('pointerdown', (e) => { if (editor.modal && e.target !== gpuCanvas) endModal(true); }, true);
 // a press outside an open menu only closes the menu (it does not also select or press what lies under it)
 let swallowClick = false;
 document.addEventListener('pointerdown', (e) => {
@@ -227,6 +251,16 @@ function freeSpot(r, avoidBlocks) {
 }
 function placeNew(it) {
   const sel = selected();
+  if (pendingPlace) {
+    // added from the menu opened at the pointer: on the floor under it
+    const [x, z] = pendingPlace;
+    pendingPlace = null;
+    if (it.kind === 'obstacle') { it.pos = clampItemPos(it, [x, 0.3, z]); it.pos[1] += -obstacleBottom(it) + 0.0005; }
+    else if (it.kind === 'source') it.pos = clampItemPos(it, [x, Math.min(scene.tank.h + 0.08, 0.5), z]);
+    else if (it.kind === 'block') it.pos = clampItemPos(it, [x, it.dims.h / 2 + 0.001, z]);
+    else it.pos = clampItemPos(it, [x, 0, z]);
+    return null;
+  }
   if (it.kind === 'source' && sel && sel.kind !== 'source') {
     // a source added while something is selected pours onto it
     it.pos = clampItemPos(it, [sel.pos[0], Math.min(scene.tank.h + 0.08, 0.5), sel.pos[2]]);
@@ -323,7 +357,7 @@ function saveFile() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast('シーンをファイルに保存しました', 1800);
+  toast('シーンをファイルに保存しました（suiri-lab-scene.json）', 4000);
 }
 function copyScene() {
   const txt = JSON.stringify(sceneFile(), null, 1);
@@ -1018,9 +1052,16 @@ function updateHint() {
   let h;
   if (m) {
     const nm = { move: '移動', rotate: '回転', scale: '大きさ' }[m.type];
-    const ax = m.axis >= 0 ? `　<b>${'XYZ'[m.axis]}（${AXIS_WORDS[m.axis]}）に固定</b>` : '';
-    const typed = m.typed ? `　入力：<b>${m.typed}${m.type === 'move' ? ' cm' : m.type === 'rotate' ? '°' : ' 倍'}</b>` : '';
-    h = `${nm}中${ax}${typed}　<kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> で軸を固定（Z が上下）・数字で値を入力・クリックか <kbd>Enter</kbd> で確定・右クリックか <kbd>Esc</kbd> で取り消し`;
+    const space = m.local ? '物の' : '';
+    const ax = m.axis < 0 ? '' : m.exclude ? `　<b>${'XYZ'[m.axis]} 以外で${m.type === 'scale' ? '変える' : '動かす'}</b>` : `　<b>${space}${'XYZ'[m.axis]}（${AXIS_WORDS[m.axis]}）に固定</b>`;
+    let typed = '';
+    if (m.typing) {
+      const unit = m.type === 'move' ? ' cm' : m.type === 'rotate' ? '°' : ' 倍';
+      const shown = m.type === 'move' && !(m.axis >= 0 && !m.exclude) ? [0, 1, 2].filter((a) => !(m.exclude && a === m.axis)) : [m.cur];
+      typed = '　入力：' + shown.map((a) => `${m.type === 'move' ? 'XYZ'[a] + ' ' : ''}${a === m.cur ? '<b>' : ''}${m.vals[a] || '0'}${a === m.cur ? '</b>' : ''}`).join('・') + unit;
+    }
+    const stop = m.clamped ? '　<b>水槽の端で止めました</b>' : '';
+    h = `${nm}中${ax}${typed}${stop}　<kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> 軸を固定（Z が上下、もう一度で物の向き、<kbd>Shift</kbd> でその軸以外）・数字で値・<kbd>Tab</kbd> 次の軸・クリックか <kbd>Enter</kbd> で確定・右クリックか <kbd>Esc</kbd> で取り消し`;
   } else if (selectedId === 'tank') {
     h = '右の欄で水槽の大きさと計算の細かさを変えられます　空いた所をクリックで選択を解除';
   } else if (selected()) {
@@ -1053,79 +1094,143 @@ function confirmDelete() {
   buildMenu(dd, [{ grp: `「${it.name}」を削除しますか？` }, { label: '削除する', act: deleteSelected }, { label: 'やめる', act: () => {} }]);
   dd.hidden = false;
   if (at) { dd.style.position = 'fixed'; dd.style.left = at[0] + 'px'; dd.style.top = at[1] + 'px'; }
+  fitMenu(dd, at);
   dd.querySelector('button').focus({ preventScroll: true });
 }
-function modalTyped(k) {
-  const m = editor.modal;
-  let s = m.typed || '';
-  if (k === 'Backspace') s = s.slice(0, -1);
-  else if (k === '-') s = s.startsWith('-') ? s.slice(1) : '-' + s;
-  else if (k === '.' && s.includes('.')) return;
-  else s += k;
-  m.typed = s;
-  applyTyped();
-  updateHint();
+// ---------- extra editing keys ----------
+let clipboardItem = null;
+function copySelected() {
+  const it = selected();
+  if (!it) return;
+  clipboardItem = cloneScene(it);
+  toast(`「${it.name}」をコピーしました（Ctrl+V で貼り付け）`, 1800);
 }
-function applyTyped() {
-  const m = editor.modal, it = m.item;
-  const v = parseFloat(m.typed);
-  Object.assign(it, cloneScene(m.start));
-  if (!Number.isFinite(v)) { sceneChanged(false); return; }
-  const ax = m.axis >= 0 ? m.axis : 0;
-  if (m.type === 'move') setPos(it, v3.add(m.start.pos, v3.mul(uiAxisDir(ax), v / 100)));
-  else if (m.type === 'rotate') {
-    if (it.kind === 'source') setAim(it, m3.apply(m3.axisAngle(uiAxisDir(ax), v * DEG), sourceDir(m.start)), false);
-    else setItemRotation(it, m3.mul(m3.axisAngle(uiAxisDir(ax), v * DEG), m.R0));
-  } else if (m.type === 'scale' && v > 0) {
-    const map = scaleMap(it);
-    setDims(it, m.start, m.axis >= 0 ? map[localOfUI(it, m.axis)] : [...map[0], ...map[1], ...map[2]], v);
-    afterScale(it, m.start, v, m.lastX ?? m.cx, m.lastY ?? m.cy);
+function pasteItem() {
+  if (!clipboardItem) { toast('先に物や水源を選んで Ctrl+C でコピーしてください', 2200); return; }
+  const c = cloneScene(clipboardItem);
+  c.id = uid++;
+  addItem(c);
+}
+// Blender's Alt+G / Alt+R / Alt+S: back to the middle of the tank, no rotation, the size it was added with
+function clearTransform(kind) {
+  const it = selected();
+  if (!it) return;
+  if (kind === 'pos') {
+    it.pos = clampItemPos(it, [0, it.pos[1], 0]);
+    if (it.kind === 'obstacle') it.pos[1] += -obstacleBottom(it) + 0.0005;
+  } else if (kind === 'rot') {
+    if (it.kind === 'source') { it.pitch = -90; it.yaw = 0; }
+    else if (it.rot) it.rot = [0, 0, 0];
+  } else if (kind === 'size') {
+    if (it.kind === 'obstacle') keepOnFloor(it, () => { it.dims = { ...SHAPES[it.shape].dims }; });
+    else if (it.kind === 'block') it.dims = { ...makeBlock().dims };
+    else if (it.kind === 'drain') it.r = makeDrain().r;
   }
-  sceneChanged(false);
+  pushUndo();
+  sceneChanged(true);
+  toast({ pos: '位置を水槽の中央に戻しました', rot: '回転を戻しました', size: '大きさを最初の値に戻しました' }[kind], 1600);
+}
+function togglePanel(cls) {
+  if (narrowMQ.matches) return;
+  $('app').classList.toggle(cls);
+  resizePending = true;
+}
+function renameSelected() {
+  const inp = $('props').querySelector('input.txt[aria-label="名前"]');
+  if (inp) { inp.focus(); inp.select(); }
+}
+// right click in the 3D view
+function openContextMenu(x, y, it) {
+  closeMenus();
+  const dd = $('dd-add');
+  const list = it ? [
+    { grp: it.name },
+    { label: '複製', key: 'Shift+D', act: () => duplicateSelected(false) },
+    it.kind === 'obstacle' ? { label: '床に置く', act: () => { it.pos[1] += -obstacleBottom(it) + 0.0005; pushUndo(); sceneChanged(true); } } : null,
+    { label: '位置を水槽の中央に', key: 'Alt+G', act: () => clearTransform('pos') },
+    canRotate(it) ? { label: '回転を戻す', key: 'Alt+R', act: () => clearTransform('rot') } : null,
+    { label: 'この物に寄る', key: '.', act: focusSelected },
+    { sep: true },
+    { label: '削除', key: 'X', act: deleteSelected },
+  ] : [
+    { label: 'ここに追加…', key: 'Shift+A', act: () => openMenu('m-add', 'dd-add', addMenu, [x, y]) },
+    { label: '全体を表示', key: 'Home', act: viewHome },
+  ];
+  buildMenu(dd, list.filter(Boolean));
+  dd.hidden = false;
+  dd.style.position = 'fixed'; dd.style.left = x + 'px'; dd.style.top = y + 'px';
+  fitMenu(dd, [x, y]);
+  dd.querySelector('button').focus({ preventScroll: true });
 }
 const VIEW_KEYS = { 1: 'front', 3: 'side', 7: 'top' };
+const NUMPAD_VIEWS = { Numpad1: 'front', Numpad3: 'side', Numpad7: 'top' };
 window.addEventListener('keydown', (e) => {
   const tgt = e.target;
   if (tgt instanceof HTMLInputElement || tgt instanceof HTMLTextAreaElement) return;
   const k = e.key;
-  if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
-  if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) { e.preventDefault(); if (window.__noDownloads) copyScene(); else saveFile(); return; }
-  if ((e.ctrlKey || e.metaKey) && (k === 'o' || k === 'O')) { e.preventDefault(); openFile(); return; }
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const ctrl = e.ctrlKey || e.metaKey;
   if (editor.modal) {
+    // while moving, turning or resizing, keys steer the operation (Ctrl+Z gives it up instead of undoing)
     e.preventDefault();
-    if (k === 'Escape') endModal(false);
-    else if (k === 'Enter') endModal(true);
-    else if ('xyzXYZ'.includes(k) && k.length === 1) {
-      const a = 'xyz'.indexOf(k.toLowerCase());
-      editor.modal.axis = editor.modal.axis === a ? -1 : a;
-      if (editor.modal.typed) applyTyped();
-      else if (editor.modal.lastX !== undefined) updateModal(editor.modal.lastX, editor.modal.lastY, e.shiftKey);
-      updateHint();
-    } else if (/^[0-9.\-]$/.test(k) || k === 'Backspace') modalTyped(k);
+    if (k === 'Escape' || (ctrl && (k === 'z' || k === 'Z'))) endModal(false);
+    else if (k === 'Enter' || k === ' ') endModal(true);
+    else if ('xyzXYZ'.includes(k) && k.length === 1 && !ctrl) modalAxisKey('xyz'.indexOf(k.toLowerCase()), e.shiftKey);
+    else if (k === 'Tab') modalTab(e.shiftKey);
+    else if (/^[0-9.\-]$/.test(k) || k === 'Backspace') modalTyped(k);
     return;
   }
+  if (ctrl && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (ctrl && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
+  if (ctrl && (k === 's' || k === 'S')) { e.preventDefault(); if (window.__noDownloads) copyScene(); else saveFile(); return; }
+  if (ctrl && (k === 'o' || k === 'O')) { e.preventDefault(); openFile(); return; }
   // Space plays and pauses wherever the focus is (buttons are pressed with Enter)
   if (k === ' ') { e.preventDefault(); setPlaying(!settings.playing); return; }
-  if (k === 'Escape') { if (!$('welcome').hidden) { $('welcome-ok').click(); return; } closeMenus(); if (selectedId !== null) select(null); return; }
-  // the remaining single keys act on the 3D view; inside the panels and menus they keep their usual meaning
+  if (k === 'Escape') {
+    if (!$('welcome').hidden) { $('welcome-ok').click(); return; }
+    if (!$('keys').hidden) { $('keys').hidden = true; return; }
+    closeMenus(); if (selectedId !== null) select(null); return;
+  }
+  if (k === 'F1' || k === '?') { e.preventDefault(); showKeys(); return; }
+  // the remaining keys act on the 3D view; inside the panels and menus they keep their usual meaning
   if (tgt instanceof Element && tgt.closest('aside, .dropdown')) return;
-  if (k === 'A' && e.shiftKey) { e.preventDefault(); openMenu('m-add', 'dd-add', addMenu, lastPointer ? clientFromLocal(lastPointer) : null); }
+  // the number pad works whether Num Lock is on or off
+  if (NUMPAD_VIEWS[e.code]) { e.preventDefault(); animateCamera({ ...VIEW_PRESETS[NUMPAD_VIEWS[e.code]], ...frameAll() }); return; }
+  if (e.code === 'NumpadDecimal') { e.preventDefault(); focusSelected(); return; }
+  if (ctrl && (k === 'c' || k === 'C')) { if (selected()) { e.preventDefault(); copySelected(); } return; }
+  if (ctrl && (k === 'v' || k === 'V')) { e.preventDefault(); pasteItem(); return; }
+  if (e.altKey && !ctrl) {
+    const code = { KeyG: 'pos', KeyR: 'rot', KeyS: 'size' }[e.code];
+    if (code && selected()) { e.preventDefault(); clearTransform(code); }
+    return;
+  }
+  if (ctrl) return;
+  const plain = !e.shiftKey;
+  if (k === 'A' && e.shiftKey) { e.preventDefault(); openMenu('m-add', 'dd-add', addMenu, lastPointer ? clientFromLocal(lastPointer) : null, true); }
   else if ((k === 'D' || k === 'd') && e.shiftKey) { e.preventDefault(); duplicateSelected(true); }
-  else if (k === 'g' || k === 'G') { if (lastPointer) startModal('move', lastPointer[0], lastPointer[1]); }
-  else if (k === 'r' || k === 'R') { if (lastPointer) startModal('rotate', lastPointer[0], lastPointer[1]); }
-  else if (k === 's' || k === 'S') { if (lastPointer) startModal('scale', lastPointer[0], lastPointer[1]); }
-  else if (k === 'x' || k === 'X') { if (selected()) { e.preventDefault(); confirmDelete(); } }
+  else if (plain && k === 'g') { if (lastPointer) startModal('move', lastPointer[0], lastPointer[1]); }
+  else if (plain && k === 'r') { if (lastPointer) startModal('rotate', lastPointer[0], lastPointer[1]); }
+  else if (plain && k === 's') { if (lastPointer) startModal('scale', lastPointer[0], lastPointer[1]); }
+  else if (plain && k === 'x') { if (selected()) { e.preventDefault(); confirmDelete(); } }
   else if (k === 'Delete' || k === 'Backspace') { if (selected()) { e.preventDefault(); deleteSelected(); } }
+  else if (k === 'F2') { e.preventDefault(); renameSelected(); }
+  else if (plain && k === 'n') togglePanel('no-side');
+  else if (plain && k === 't') togglePanel('no-tools');
   else if (k === 'Home') viewHome();
   else if (VIEW_KEYS[k]) animateCamera({ ...VIEW_PRESETS[VIEW_KEYS[k]], ...frameAll() });
   else if (k === '.') focusSelected();
   else if (k === 'ArrowRight') stepOnce();
   else if (k === 'ArrowLeft' && e.shiftKey) resetSim();
-  else if (k === 'w' || k === 'W') setTool('move');
-  else if (k === 'e' || k === 'E') setTool('rotate');
+  else if (plain && k === 'w') setTool('move');
+  else if (plain && k === 'e') setTool('rotate');
 });
+
+// ---------- keys ----------
+function showKeys() {
+  closeMenus();
+  $('keys').hidden = false;
+  $('keys-close').focus({ preventScroll: true });
+}
+$('keys-close').addEventListener('click', () => { $('keys').hidden = true; });
 
 // ---------- first visit ----------
 function showWelcome() {

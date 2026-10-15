@@ -153,7 +153,8 @@ aside.side {
   display: grid; grid-template-rows: fit-content(45%) 6px minmax(0, 1fr);
   background: var(--panel); border-left: 1px solid var(--line);
 }
-.split { cursor: row-resize; touch-action: none; background: var(--line-soft); border-top: 1px solid var(--line); }
+.split { cursor: row-resize; touch-action: none; background: var(--line-soft); border-top: 1px solid var(--line); position: relative; }
+.split::after { content: ""; position: absolute; left: 50%; top: 1px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: var(--muted); opacity: 0.7; }
 .split:hover { background: var(--line); }
 .sheet-head { display: none; }
 .side-sec { min-height: 0; display: flex; flex-direction: column; }
@@ -303,6 +304,16 @@ footer.time {
 .welcome .extra { font-size: 12.5px; }
 .welcome .btn { justify-self: end; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .welcome.textbox { position: fixed; z-index: 60; }
+.welcome .card.keys { max-width: 620px; }
+.welcome dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; font-size: 13px; }
+.welcome dt { color: #ffd9a3; font-weight: 600; }
+.welcome dd { margin: 0; color: var(--text); line-height: 1.6; }
+@media (max-width: 560px) { .welcome dl { grid-template-columns: minmax(0, 1fr); } .welcome dd { margin-bottom: 6px; } }
+.app.no-side { grid-template-columns: 62px minmax(0, 1fr) 0; }
+.app.no-side aside.side { display: none; }
+.app.no-tools { grid-template-columns: 0 minmax(0, 1fr) 320px; }
+.app.no-tools nav.tools { display: none; }
+.app.no-side.no-tools { grid-template-columns: 0 minmax(0, 1fr) 0; }
 .welcome textarea { width: 100%; min-height: 10em; resize: vertical; border-radius: 6px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: 12px/1.4 var(--font-data); padding: 8px; }
 .fatal {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg);
@@ -525,6 +536,21 @@ footer.time {
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"><span class="msg"></span><button class="act" type="button" hidden></button></div>
+<div class="welcome textbox" id="keys" hidden>
+  <div class="card keys" role="dialog" aria-labelledby="keys-title">
+    <h2 id="keys-title">キー操作</h2>
+    <dl>
+      <dt>視点</dt><dd>空いた所をドラッグ（中ボタンでも）：回す ／ Shift+ドラッグ：平行移動 ／ ホイール：拡大<br>1 正面・3 右・7 真上（テンキーも可）／ Home 全体 ／ . 選んだ物に寄る</dd>
+      <dt>選ぶ・動かす</dt><dd>クリック：選ぶ（そのままドラッグで床に沿って移動）／ G 移動・R 回転・S 大きさ<br>操作中：X・Y・Z で軸を固定（もう一度で物の向き、Shift でその軸以外）、数字で値、Tab で次の軸、Enter で確定、Esc で取り消し</dd>
+      <dt>戻す</dt><dd>Alt+G 位置を水槽の中央に ／ Alt+R 回転を戻す ／ Alt+S 大きさを最初の値に</dd>
+      <dt>追加・削除</dt><dd>Shift+A 追加（ポインタの下に置く）／ Shift+D 複製 ／ Ctrl+C・Ctrl+V コピーと貼り付け ／ X 削除（確認あり）／ Delete すぐ削除 ／ F2 名前を変える ／ 右クリック：その物のメニュー</dd>
+      <dt>画面と再生</dt><dd>N 右の欄 ／ T 左の道具 ／ Space 再生・一時停止 ／ → コマ送り ／ Shift+← 最初から</dd>
+      <dt>ファイル</dt><dd>Ctrl+S 保存 ／ Ctrl+O 開く ／ Ctrl+Z 元に戻す ／ Ctrl+Shift+Z・Ctrl+Y やり直す</dd>
+      <dt>Blender との違い</dt><dd>上下は Z（Blender と同じ）。選べるのは一度に 1 つです。Ctrl+数字の視点と Ctrl+N はブラウザが使うため使えません。</dd>
+    </dl>
+    <button class="btn" id="keys-close" type="button">閉じる</button>
+  </div>
+</div>
 <div class="welcome textbox" id="scene-text" hidden>
   <div class="card" role="dialog" aria-labelledby="scene-text-title">
     <h2 id="scene-text-title">シーンの内容</h2>

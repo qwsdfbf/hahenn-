@@ -223,7 +223,10 @@ struct FO { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
   // a deep pool shifts the view in proportion to its depth
   let shift = nV.xy * min(tc * 0.35, 0.03) * F.misc.x / z;
   let uv = clamp((vec2f(p) + 0.5 + vec2f(-shift.x, shift.y)) * F.screen.zw, F.screen.zw, vec2f(1.0) - F.screen.zw);
-  var behind = textureSampleLevel(sceneColor, samp, uv, 0.0).rgb;
+  // what is seen through the water must lie behind its surface; a shifted sample that lands on something in front
+  // of it (the near side of a cup standing in the pool) is replaced by the view straight through
+  var behind = sc;
+  if (linDepth(textureLoad(sceneDepth, vec2i(uv * F.screen.xy), 0)) > z) { behind = textureSampleLevel(sceneColor, samp, uv, 0.0).rgb; }
   // a thin stream or a drop is a strong lens: the ray leaves its far side bent by 2(θi − θt) towards the axis and
   // picks up what lies behind on the opposite side, so the surroundings show through it flipped and squeezed
   let thin = 1.0 - smoothstep(0.02, 0.06, tc);
@@ -239,7 +242,9 @@ struct FO { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
       let cb = F.proj * vec4f(pb, 1.0);
       let ub = vec2f(cb.x / cb.w * 0.5 + 0.5, 0.5 - cb.y / cb.w * 0.5);
       var seen = skyL(toWorld(dx), 0.0);
-      if (cb.w > 0.0 && all(ub > F.screen.zw) && all(ub < vec2f(1.0) - F.screen.zw)) { seen = textureSampleLevel(sceneColor, samp, ub, 0.0).rgb; }
+      if (cb.w > 0.0 && all(ub > F.screen.zw) && all(ub < vec2f(1.0) - F.screen.zw) && linDepth(textureLoad(sceneDepth, vec2i(ub * F.screen.xy), 0)) > z) {
+        seen = textureSampleLevel(sceneColor, samp, ub, 0.0).rgb;
+      }
       behind = mix(behind, seen, thin);
     }
   }

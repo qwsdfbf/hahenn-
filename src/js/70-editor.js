@@ -331,10 +331,10 @@ function updateGizmoDrag(cx, cy, shift) {
   d.moved = d.moved || Math.hypot(cx - d.cx, cy - d.cy) > 2;
   if (h.type === 'axis') {
     const s = rayLineParam(ray, d.start.pos, h.axis);
-    if (s !== null && d.s0 !== null) setPos(it, v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
+    if (s !== null && d.s0 !== null && nearEnough(v3.add(d.start.pos, v3.mul(h.axis, s - d.s0)), d.start.pos)) setPos(it, v3.add(d.start.pos, v3.mul(h.axis, snap(s - d.s0, shift))));
   } else if (h.type === 'free') {
     const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
-    if (hit && d.hit0) {
+    if (hit && d.hit0 && nearEnough(hit, d.start.pos)) {
       const delta = v3.sub(hit, d.hit0);
       setPos(it, [d.start.pos[0] + snap(delta[0], shift), d.start.pos[1], d.start.pos[2] + snap(delta[2], shift)]);
     }
@@ -419,7 +419,7 @@ function updateBodyDrag(cx, cy, shift) {
     } else {
       d.vhit0 = null;
       const hit = rayPlane(ray, d.start.pos, [0, 1, 0]);
-      if (hit && d.hit0) setPos(it, [d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
+      if (hit && d.hit0 && nearEnough(hit, d.start.pos)) setPos(it, [d.start.pos[0] + hit[0] - d.hit0[0], d.start.pos[1], d.start.pos[2] + hit[2] - d.hit0[2]]);
     }
   } else if (editor.tool === 'rotate') {
     // turn about the vertical axis, following the pointer around the item's centre
@@ -444,13 +444,15 @@ function bodyDragAllowed(it) {
 }
 
 // ---------- modal transforms (G / R / S) ----------
+// As in Blender: X, Y or Z locks that axis (pressed again: the item's own axis, a third time: free again), Shift with
+// the letter keeps everything but that axis. Digits type an exact value; Tab goes on to the next axis.
 function startModal(type, cx, cy) {
   const it = selected();
   if (!it || editor.drag) return;
   if (type === 'rotate' && !canRotate(it)) { toast(toolNote('rotate', it) || 'この項目は回転できません', 2000); return; }
   if (type === 'scale' && !canScale(it)) { toast(toolNote('scale', it) || 'この項目は大きさを変えられません', 2000); return; }
   const ray = rayAt(cx, cy);
-  const m = { type, item: it, start: cloneScene(it), axis: -1, cx, cy };
+  const m = { type, item: it, start: cloneScene(it), axis: -1, local: false, exclude: false, vals: ['', '', ''], cur: 0, typing: false, clamped: false, cx, cy };
   m.plane0 = rayPlane(ray, it.pos, [0, 1, 0]);
   const pc = project(it.pos);
   m.ang0 = Math.atan2(cy - pc.y, cx - pc.x);
@@ -459,42 +461,123 @@ function startModal(type, cx, cy) {
   editor.modal = m;
   updateHint();
 }
+// direction of editor axis a: the world's, or the item's own when the axis key was pressed twice
+function modalAxisDir(m, a) {
+  if (!m.local) return uiAxisDir(a);
+  const k = [0, 2, 1][a], sg = a === 1 ? -1 : 1, R = m.R0;
+  return [R[k] * sg, R[3 + k] * sg, R[6 + k] * sg];
+}
+// a pointer close to the horizon meets a plane or a line very far away; such positions are skipped so that the
+// item does not jump to the wall
+function nearEnough(p, ref) { return v3.len(v3.sub(p, view.eye)) < 4 * v3.len(v3.sub(ref, view.eye)) + 0.3; }
+function moveTo(m, p) {
+  const it = m.item;
+  setPos(it, p);
+  m.clamped = v3.len(v3.sub(it.pos, p)) > 1e-6;
+}
 function updateModal(cx, cy, shift) {
   const m = editor.modal, it = m.item;
+  m.lastX = cx; m.lastY = cy;
+  if (m.typing) return;
   const ray = rayAt(cx, cy);
   const pc = project(m.start.pos);
-  if (m.typed) return;
+  const p0 = m.start.pos;
   if (m.type === 'move') {
-    if (m.axis >= 0) {
-      const ax = uiAxisDir(m.axis);
-      const s0 = rayLineParam(rayAt(m.cx, m.cy), m.start.pos, ax);
-      const s = rayLineParam(ray, m.start.pos, ax);
-      if (s !== null && s0 !== null) setPos(it, v3.add(m.start.pos, v3.mul(ax, snap(s - s0, shift))));
+    if (m.axis >= 0 && !m.exclude) {
+      const ax = modalAxisDir(m, m.axis);
+      const s0 = rayLineParam(rayAt(m.cx, m.cy), p0, ax);
+      const s = rayLineParam(ray, p0, ax);
+      if (s === null || s0 === null || !nearEnough(v3.add(p0, v3.mul(ax, s - s0)), p0)) return;
+      moveTo(m, v3.add(p0, v3.mul(ax, snap(s - s0, shift))));
     } else {
-      // without an axis the item slides over the floor plane through it (Z moves it up and down)
-      const hit = rayPlane(ray, m.start.pos, [0, 1, 0]);
-      if (hit && m.plane0) setPos(it, [m.start.pos[0] + snap(hit[0] - m.plane0[0], shift), m.start.pos[1], m.start.pos[2] + snap(hit[2] - m.plane0[2], shift)]);
+      // without an axis the item slides over the floor plane through it; Shift+axis slides in the plane across it
+      const n = m.axis >= 0 ? modalAxisDir(m, m.axis) : [0, 1, 0];
+      const h0 = rayPlane(rayAt(m.cx, m.cy), p0, n), h = rayPlane(ray, p0, n);
+      if (!h0 || !h || !nearEnough(h, p0)) return;
+      moveTo(m, v3.add(p0, v3.sub(h, h0).map((x) => snap(x, shift))));
     }
   } else if (m.type === 'rotate') {
     let da = Math.atan2(cy - pc.y, cx - pc.x) - m.ang0;
     if (shift) da = Math.round(da / (15 * DEG)) * 15 * DEG;
-    const axis = m.axis >= 0 ? uiAxisDir(m.axis) : view.fwd.map((x) => -x);
-    if (it.kind === 'source') {
-      setAim(it, m3.apply(m3.axisAngle(axis, -da), sourceDir(m.start)), false);
-    } else {
-      const sgn = m.axis >= 0 ? -Math.sign(v3.dot(axis, view.fwd) || -1) : 1;
-      setItemRotation(it, m3.mul(m3.axisAngle(axis, -da * sgn), m.R0));
-    }
+    rotateBy(m, da, true);
   } else if (m.type === 'scale') {
     let ratio = clamp(Math.hypot(cx - pc.x, cy - pc.y) / m.r0, 0.05, 20);
     if (shift) ratio = Math.round(ratio * 10) / 10 || 0.1;
-    const map = scaleMap(it);
-    const keys = m.axis >= 0 ? map[localOfUI(it, m.axis)] : [...map[0], ...map[1], ...map[2]];
-    setDims(it, m.start, keys, ratio);
-    afterScale(it, m.start, ratio, cx, cy);
+    scaleBy(m, ratio, cx, cy);
   }
-  m.lastX = cx; m.lastY = cy;
   sceneChanged(false);
+}
+function rotateBy(m, da, fromPointer) {
+  const it = m.item;
+  const axis = m.axis >= 0 ? modalAxisDir(m, m.axis) : view.fwd.map((x) => -x);
+  // a pointer circling clockwise on screen turns the item clockwise as seen from the camera
+  const sgn = fromPointer && m.axis >= 0 ? -Math.sign(v3.dot(axis, view.fwd) || -1) : 1;
+  const ang = fromPointer ? -da * sgn : da;
+  if (it.kind === 'source') setAim(it, m3.apply(m3.axisAngle(axis, ang), sourceDir(m.start)), false);
+  else setItemRotation(it, m3.mul(m3.axisAngle(axis, ang), m.R0));
+}
+function scaleBy(m, ratio, cx, cy) {
+  const it = m.item, map = scaleMap(it);
+  const localOf = (a) => (m.local ? [0, 2, 1][a] : localOfUI(it, a));
+  let keys;
+  if (m.axis < 0) keys = [...map[0], ...map[1], ...map[2]];
+  else if (m.exclude) keys = [0, 1, 2].filter((a) => a !== m.axis).flatMap((a) => map[localOf(a)]);
+  else keys = map[localOf(m.axis)];
+  setDims(it, m.start, keys, ratio);
+  afterScale(it, m.start, ratio, cx, cy);
+}
+// X / Y / Z (with Shift: all but that axis)
+function modalAxisKey(a, shift) {
+  const m = editor.modal;
+  if (shift) { const same = m.axis === a && m.exclude; m.axis = same ? -1 : a; m.exclude = !same; m.local = false; }
+  else if (m.axis !== a || m.exclude) { m.axis = a; m.exclude = false; m.local = false; }
+  else if (!m.local) m.local = true;
+  else { m.axis = -1; m.local = false; }
+  if (m.axis >= 0 && !m.exclude) m.cur = m.axis;
+  restartModal();
+}
+function modalTab(back) {
+  const m = editor.modal;
+  if (m.type !== 'move' || (m.axis >= 0 && !m.exclude)) return;
+  do { m.cur = (m.cur + (back ? 2 : 1)) % 3; } while (m.exclude && m.cur === m.axis);
+  m.typing = true;
+  updateHint();
+}
+function modalTyped(k) {
+  const m = editor.modal;
+  if (!m.typing) { m.typing = true; m.cur = m.axis >= 0 && !m.exclude ? m.axis : m.exclude && m.cur === m.axis ? (m.axis + 1) % 3 : m.cur; }
+  let v = m.vals[m.cur];
+  if (k === 'Backspace') v = v.slice(0, -1);
+  else if (k === '-') v = v.startsWith('-') ? v.slice(1) : '-' + v;
+  else if (k === '.' && v.includes('.')) return;
+  else v += k;
+  m.vals[m.cur] = v;
+  restartModal();
+}
+// puts the item back to where the modal started and applies the typed values or the pointer again
+function restartModal() {
+  const m = editor.modal;
+  Object.assign(m.item, cloneScene(m.start));
+  m.clamped = false;
+  if (m.typing) applyTyped();
+  else if (m.lastX !== undefined) updateModal(m.lastX, m.lastY, false);
+  sceneChanged(false);
+  updateHint();
+}
+function applyTyped() {
+  const m = editor.modal, it = m.item;
+  const num = (i) => { const v = parseFloat(m.vals[i]); return Number.isFinite(v) ? v : 0; };
+  const axes = m.axis < 0 ? [0, 1, 2] : m.exclude ? [0, 1, 2].filter((a) => a !== m.axis) : [m.axis];
+  if (m.type === 'move') {
+    let d = [0, 0, 0];
+    for (const a of axes) d = v3.add(d, v3.mul(modalAxisDir(m, a), num(a) / 100));
+    moveTo(m, v3.add(m.start.pos, d));
+  } else if (m.type === 'rotate') {
+    rotateBy(m, num(m.cur) * DEG, false);
+  } else if (m.type === 'scale') {
+    const v = parseFloat(m.vals[m.cur]);
+    if (Number.isFinite(v) && v > 0) scaleBy(m, clamp(v, 0.05, 20), m.lastX ?? m.cx, m.lastY ?? m.cy);
+  }
 }
 function endModal(commit) {
   const m = editor.modal;
@@ -596,7 +679,7 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   if (editor.pointers.size > 2) return;
   camAnim = null;
   if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
-    editor.drag = { kind: e.shiftKey || e.button === 1 && e.ctrlKey ? 'pan' : 'orbit', x: cx, y: cy };
+    editor.drag = { kind: e.shiftKey || e.button === 1 && e.ctrlKey ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, context: e.button === 2, moved: false };
     return;
   }
   if (e.button !== 0) return;
@@ -609,6 +692,10 @@ gpuCanvas.addEventListener('pointerdown', (e) => {
   if (onBody && pk.exact) { beginBodyDrag(sel, cx, cy); return; }
   if (h) { beginGizmoDrag(h.h, cx, cy); return; }
   if (onBody) { beginBodyDrag(sel, cx, cy); return; }
+  if (!editor.touch && pk.exact && pk.it && pk.it !== 'tank' && pk.it.kind !== 'block') {
+    select(pk.it.id);
+    if (bodyDragAllowed(pk.it)) { beginBodyDrag(pk.it, cx, cy); return; }
+  }
   editor.drag = { kind: e.shiftKey || editor.panMode ? 'pan' : 'orbit', x: cx, y: cy, sx: cx, sy: cy, click: true, moved: false, pick: pk.it };
 });
 gpuCanvas.addEventListener('pointermove', (e) => {
@@ -636,13 +723,13 @@ gpuCanvas.addEventListener('pointermove', (e) => {
       const onBody = pk.it && pk.it === sel && bodyDragAllowed(sel);
       const h = hh && (hh.firm || !(onBody && pk.exact)) ? hh.h : null;
       editor.hover = h;
-      gpuCanvas.style.cursor = h ? 'pointer' : onBody ? 'move' : pk.it ? 'pointer' : 'default';
+      gpuCanvas.style.cursor = h ? 'pointer' : onBody || (pk.exact && pk.it && pk.it !== 'tank' && pk.it.kind !== 'block') ? 'move' : pk.it ? 'pointer' : 'default';
     }
     return;
   }
   if (d.kind === 'gizmo') { updateGizmoDrag(cx, cy, e.shiftKey); return; }
   if (d.kind === 'orbit' || d.kind === 'pan') {
-    if (d.click && !d.moved && Math.hypot(cx - d.sx, cy - d.sy) < (editor.touch ? 8 : 3)) return;
+    if ((d.click || d.context) && !d.moved && Math.hypot(cx - d.sx, cy - d.sy) < (editor.touch ? 8 : 3)) return;
     d.moved = true;
     const dx = cx - d.x, dy = cy - d.y;
     if (d.kind === 'orbit') orbit(dx, dy); else pan(dx, dy);
@@ -667,6 +754,10 @@ function endPointer(e) {
   } else if (d.click && !d.moved && e.type === 'pointerup') {
     const id = d.pick === 'tank' ? 'tank' : d.pick ? d.pick.id : null;
     if (id !== selectedId) select(id, { reveal: true });
+  } else if (d.context && !d.moved && e.type === 'pointerup') {
+    const it = pickItem(d.sx, d.sy);
+    if (it && it !== 'tank' && it.id !== selectedId) select(it.id);
+    openContextMenu(e.clientX, e.clientY, it && it !== 'tank' ? it : null);
   }
 }
 gpuCanvas.addEventListener('pointerup', endPointer);
@@ -858,7 +949,7 @@ function drawOverlay() {
   }
   if (editor.modal && editor.modal.axis >= 0) {
     const m = editor.modal;
-    const c = m.start.pos, ax = uiAxisDir(m.axis), L = 4;
+    const c = m.start.pos, ax = modalAxisDir(m, m.axis), L = 4;
     const a = project(v3.sub(c, v3.mul(ax, L))), b = project(v3.add(c, v3.mul(ax, L)));
     if (a.ok && b.ok) drawArrow(a, b, AXIS_COLORS[m.axis], 1.4, false);
   }
