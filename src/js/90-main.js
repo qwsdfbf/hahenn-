@@ -8,17 +8,26 @@ function rebuildSim(refill) {
   sim.setObjects(scene.items, 0);
   if (refill) sim.emitNow(blockEmits(sim));
   pBGCache.key = null;
+  forgetStaleWaterSteps();
   refreshPanels();
 }
 // water and time back to the start: the water blocks are filled again, sources start over
-function resetSim(quiet) {
-  if (!quiet) sim.saveWater();
+function restartWater() {
   sim.clearWater();
   sim.setObjects(scene.items, 0);
   sim.emitNow(blockEmits(sim));
-  if (!quiet) toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 5000, { label: '元に戻す', run: restoreWaterNow });
 }
-function restoreWaterNow() { if (sim.restoreWater()) toast('水を戻しました', 1400); }
+// resetting or clearing the water first keeps a copy of it, so that the step can be undone
+function waterAction(kind) {
+  const copy = sim.saveWater();
+  if (kind === 'reset') restartWater();
+  else sim.clearWater();
+  return copy;
+}
+function resetSim() {
+  pushWaterStep('reset', waterAction('reset'));
+  toast('水と時間を最初の状態に戻しました（物の配置はそのまま）', 6000, undoAction());
+}
 
 // ---------- sizing ----------
 let resizePending = true;
@@ -190,6 +199,7 @@ window.suiriLab = {
   screen(p) { const q = project(p); const [x, y] = clientFromLocal([q.x, q.y]); return { x, y, ok: q.ok }; },
   pick(x, y) { const r = gpuCanvas.getBoundingClientRect(); const it = pickItem(x - r.left, y - r.top); return it === 'tank' ? 'tank' : it ? it.id : null; },
   handles() { const it = selected(); return it ? gizmoHandles(it).map((h) => { const a = h.b || h.a; const [x, y] = clientFromLocal([a.x, a.y]); return { type: h.type, i: h.i, ci: h.ci, x, y }; }) : []; },
+  navAxes() { return navBallAxes().map((a) => { const [x, y] = clientFromLocal([a.x, a.y]); return { i: a.i, s: a.s, x, y }; }); },
   async idle() { await device.queue.onSubmittedWorkDone(); },
   setPlaying,
 };

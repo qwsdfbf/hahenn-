@@ -129,6 +129,7 @@ function toast(msg, ms = 2600, action = null) {
   b.hidden = !action;
   b.textContent = action ? action.label : '';
   b.onclick = action ? () => { t.classList.remove('show'); action.run(); } : null;
+  t.step = action && action.step;
   t.classList.toggle('has-act', !!action);
   // on narrow screens the message sits at the bottom of the 3D view, above the sheet and the transport
   const v = $('view').getBoundingClientRect();

@@ -137,6 +137,12 @@ nav.tools .sep { width: 30px; height: 1px; background: var(--line); margin: 4px 
   position: absolute; right: 10px; top: 10px;
   display: grid; justify-items: center; gap: 6px;
 }
+.view { container-type: size; }
+/* on a short view the buttons sit in two columns beside the ball */
+@container (max-height: 330px) {
+  .navpad { grid-template-columns: auto auto; align-items: start; }
+  .navpad > .navbtns { order: -1; display: grid; grid-template-columns: repeat(2, auto); }
+}
 .navball { width: 84px; height: 84px; border-radius: 50%; background: rgba(16,19,22,0.35); cursor: grab; touch-action: none; }
 .navball:hover { background: rgba(16,19,22,0.55); }
 .navbtns { display: flex; flex-direction: column; gap: 5px; }
@@ -193,10 +199,14 @@ aside.side {
 .props { padding: 8px 10px 18px; display: grid; gap: 12px; }
 .props .empty { color: var(--muted); padding: 10px 2px; margin: 0; }
 .pgroup { display: grid; gap: 6px; }
-.pgroup > h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.pgroup > h3, .ghead > h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.ghead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ghead > h3 { margin: 0; }
 .prow { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 8px; min-height: var(--ctl); }
 .prow > .lbl { color: var(--muted); font-size: 12.5px; line-height: 1.25; }
 .prow > .lbl small { display: block; font-size: 11px; }
+.prow.stack { grid-template-columns: minmax(0, 1fr); gap: 4px; min-height: 0; }
+.prow.stack > .lbl small { display: inline; margin-left: 6px; }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
 .nf {
@@ -205,14 +215,24 @@ aside.side {
 }
 .nf:hover { border-color: var(--line); }
 .nf:focus-within, .nf.focus { border-color: var(--accent); }
-.nf .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(242,164,58,0.18); pointer-events: none; }
-.nf .fill::after { content: ""; position: absolute; right: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; background: var(--accent); }
-.nf .ax { position: relative; padding-left: 7px; font: 600 12px var(--font-data); }
+.nf .arr { flex: none; align-self: stretch; width: 16px; display: grid; place-items: center; color: var(--muted); cursor: pointer; opacity: 0; }
+.nf .arr svg { width: 7px; height: 11px; }
+.nf:hover .arr, .nf:focus-visible .arr { opacity: 1; }
+.nf .arr:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+.nf .bar { position: absolute; left: 5px; right: 5px; bottom: 3px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); pointer-events: none; }
+.nf .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--accent); }
+.nf .ax { position: relative; font: 600 12px var(--font-data); }
 .nf .ax.x { color: #ef7471; } .nf .ax.y { color: #93d673; } .nf .ax.z { color: #6fa8f2; }
 .nf .ax.pre { color: var(--muted); font-family: var(--font-body); font-weight: 500; }
-.nf .val { position: relative; flex: 1; text-align: right; padding: 0 6px; font: 13px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf .val { position: relative; flex: 1; min-width: 0; text-align: right; padding: 0 2px; font: 13px var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf.editing .arr, .nf.editing .ax, .nf.editing .val { visibility: hidden; }
 .nf input { position: absolute; inset: 0; width: 100%; border: 0; outline: 0; background: var(--field); color: var(--text); font: 13px var(--font-data); text-align: right; padding: 0 7px; }
-@media (pointer: coarse) { .nf input { font-size: 16px; } }
+.nf .unit { position: absolute; right: 8px; top: 0; bottom: 0; z-index: 1; display: flex; align-items: center; color: var(--muted); font: 13px var(--font-data); pointer-events: none; }
+@media (pointer: coarse) {
+  .nf .arr { width: 26px; opacity: 1; }
+  .nf .arr svg { width: 8px; height: 13px; }
+  .nf input { font-size: 16px; }
+}
 .seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .seg button {
   flex: 1 1 auto; min-height: var(--ctl); padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-soft);
@@ -259,7 +279,9 @@ footer.time {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--panel); border-top: 1px solid var(--line);
 }
-#btn-reset { margin-left: 14px; width: auto; padding: 0 10px; gap: 6px; }
+#btn-reset { margin-left: 14px; }
+.speed-menu { display: none; }
+.menu.up .dropdown { top: auto; bottom: calc(100% + 4px); }
 .play {
   height: 34px; width: 104px; padding: 0 10px; border-radius: 6px; border: 0; flex: none; white-space: nowrap;
   background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer;
@@ -337,7 +359,7 @@ footer.time {
   .narrow-only { display: flex !important; }
   .mbtn { padding: 0 8px; }
   nav.tools { flex-direction: row; justify-content: center; gap: 2px; padding: 3px 6px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
-  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 11px; white-space: nowrap; }
+  .tbtn { width: auto; min-width: 44px; height: 50px; padding: 0 3px; flex: none; font-size: 12px; white-space: nowrap; }
   nav.tools .sep { width: 1px; height: 30px; margin: 0 3px; }
   aside.side {
     height: min(36vh, 330px, calc(100vh - 380px));
@@ -348,16 +370,23 @@ footer.time {
   }
   aside.side.tall { height: min(62vh, 560px, calc(100vh - 250px)); height: min(62dvh, 560px, calc(100dvh - 250px)); }
   .sheet-head { touch-action: none; cursor: ns-resize; position: relative; padding-top: 10px !important; }
-  .sheet-head::before { content: ""; position: absolute; left: 50%; top: 4px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
-  .prow > .lbl { font-size: 13.5px; }
-  .pgroup > h3 { font-size: 13px; }
+  /* the grip reaches a little above the sheet so that a finger landing on its edge still takes it */
+  .sheet-head .grab { position: absolute; left: 0; right: 0; top: -14px; height: 24px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; }
+  .sheet-head .grab::before { content: ""; position: absolute; left: 50%; top: 18px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
+  .prow > .lbl { font-size: 14px; }
+  .pgroup > h3, .ghead > h3 { font-size: 13px; }
   .note, details.more { font-size: 13px; }
-  .nf .val, .nf input { font-size: 14px; }
+  .nf .val { font-size: 15px; }
+  .nf input, .nf .unit { font-size: 15px; }
   .seg button { font-size: 14px; }
+  .dropdown .grp .sub, .dropdown button .sub { font-size: 13px; }
+  /* the item's name is on the tab, and duplicate and delete are in the tool strip */
+  .sec-props .sec-head { display: none; }
   aside.side:not(.open) { display: none; }
   .sheet-head { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); }
-  .sheet-head .tabs { display: flex; gap: 4px; flex: 1; }
-  .sheet-head .tabs button { min-height: 40px; padding: 0 14px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .sheet-head .tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+  .sheet-head .tabs button { min-height: 40px; min-width: 0; padding: 0 14px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+  .sheet-head .tabs button[data-tab="list"] { flex: none; }
   .sheet-head .tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text); font-weight: 600; }
   aside.side[data-tab="props"] .sec-list, aside.side[data-tab="list"] .sec-props { display: none; }
   aside.side { grid-template-rows: auto minmax(0, 1fr) !important; }
@@ -365,17 +394,21 @@ footer.time {
   .sec-list .sec-head { display: none; }
   .drawer-btn { display: inline-flex; }
   .drawer-btn[aria-expanded="true"] { background: var(--panel-2); }
-  footer.time { gap: 4px; padding-inline: 8px; }
-  #btn-reset { margin-left: 6px; padding: 0; width: var(--ctl); }
-  #btn-reset .lbl { display: none; }
-  .play { width: 92px; height: 40px; padding: 0 6px; font-size: 13px; gap: 4px; }
-  .speeds { margin-left: auto; gap: 3px; }
-  .speeds .lbl { display: none; }
-  .speeds button { height: 40px; min-width: 40px; padding: 0 5px; }
+  footer.time { gap: 8px; padding-inline: 8px; }
+  /* icon above a short word, like the tool strip */
+  footer.time .mbtn { flex-direction: column; justify-content: center; gap: 1px; height: 50px; min-width: 58px; padding: 0 6px; font-size: 12px; }
+  footer.time .mbtn svg { width: 17px; height: 17px; }
+  #btn-speed b { font: 600 14px/17px var(--font-body); }
+  #btn-speed .lbl { display: inline-flex; align-items: center; gap: 2px; }
+  #btn-speed .lbl svg { width: 9px; height: 9px; }
+  #btn-reset { margin-left: auto; }
+  .play { width: 96px; height: 44px; padding: 0 6px; font-size: 13.5px; gap: 5px; }
+  .speeds { display: none; }
+  .speed-menu { display: block; }
   .tinfo { display: none; }
   .view-info {
     display: flex; gap: 10px; position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 6px;
-    background: rgba(16,19,22,0.78); font-size: 12.5px; color: var(--muted); pointer-events: none;
+    background: rgba(16,19,22,0.85); font-size: 12.5px; color: #c3cacf; pointer-events: none;
   }
   .view-info { font-size: 13px; }
   .view-info b { color: var(--text); font: 500 13px var(--font-data); }
@@ -384,6 +417,11 @@ footer.time {
   .navball { width: 70px; height: 70px; }
   .navbtns button { width: 40px; height: 40px; }
   .toast { top: auto; bottom: var(--toast-bottom, 64px); }
+}
+@media (pointer: coarse) {
+  .navbtns { gap: 8px; }
+  .navbtns button { width: 44px; height: 44px; }
+  .navball { width: 84px; height: 84px; }
 }
 @media (max-width: 380px) {
   .brand { display: none; }
@@ -439,7 +477,7 @@ footer.time {
       </button>
     </div>
     <span class="sep" aria-hidden="true"></span>
-    <button class="tbtn" id="btn-dup" title="複製（Shift+D）">
+    <button class="tbtn" id="btn-dup" title="少しずらした所に複製（Shift+D は複製してすぐ動かす）">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6.5" y="6.5" width="10" height="10" rx="1.5"/><path d="M13.5 6.5v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2"/></svg>複製
     </button>
     <button class="tbtn" id="btn-del" title="削除（X / Delete）">
@@ -490,8 +528,9 @@ footer.time {
 
   <aside class="side" id="side" aria-label="シーンと設定" data-tab="props">
     <div class="sheet-head">
+      <button class="grab" id="sheet-grab" type="button" aria-label="設定欄の高さを変える" title="上下にドラッグで高さを変える・押すと広げる／縮める"></button>
       <div class="tabs" role="tablist">
-        <button role="tab" data-tab="props" aria-selected="true">設定</button>
+        <button role="tab" data-tab="props" id="tab-props" aria-selected="true">設定</button>
         <button role="tab" data-tab="list" aria-selected="false">一覧</button>
       </div>
       <button class="ibtn" id="btn-side-size" aria-label="広げる" title="広げる">
@@ -516,8 +555,8 @@ footer.time {
     <button class="play" id="btn-play" aria-pressed="false" title="再生・一時停止（Space）">
       <svg viewBox="0 0 16 16" fill="currentColor" id="ico-play"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg><span id="lbl-play">一時停止</span>
     </button>
-    <button class="ibtn" id="btn-step" title="コマ送り（→）" aria-label="コマ送り">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 3.4v9.2a.5.5 0 0 0 .8.4L10 8.4a.5.5 0 0 0 0-.8L3.3 3a.5.5 0 0 0-.8.4z"/><rect x="11.5" y="3" width="2" height="10" rx="0.6"/></svg>
+    <button class="mbtn" id="btn-step" title="コマ送り（→）">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 3.4v9.2a.5.5 0 0 0 .8.4L10 8.4a.5.5 0 0 0 0-.8L3.3 3a.5.5 0 0 0-.8.4z"/><rect x="11.5" y="3" width="2" height="10" rx="0.6"/></svg><span class="lbl">コマ送り</span>
     </button>
     <div class="speeds" role="radiogroup" aria-label="再生の速さ">
       <span class="lbl">速さ</span>
@@ -526,7 +565,11 @@ footer.time {
       <button role="radio" data-speed="0.1" aria-checked="false" aria-label="10分の1の速さ">1/10</button>
       <button role="radio" data-speed="0.025" aria-checked="false" aria-label="40分の1の速さ">1/40</button>
     </div>
-    <button class="ibtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま、Shift+←）" aria-label="最初から（水と時間を最初の状態に戻す）">
+    <div class="menu up speed-menu">
+      <button class="mbtn" id="btn-speed" aria-haspopup="true" aria-expanded="false" aria-label="再生の速さ" title="再生の速さ"><b id="speed-now">1倍</b><span class="lbl">速さ<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5L5 4l2.5 2.5"/></svg></span></button>
+      <div class="dropdown" id="dd-speed" hidden></div>
+    </div>
+    <button class="mbtn" id="btn-reset" title="水と時間を最初の状態に戻す（物の配置はそのまま、Shift+←）" aria-label="最初から（水と時間を最初の状態に戻す）">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2.5" y="3" width="2" height="10" rx="0.6"/><path d="M13.5 3.4v9.2a.5.5 0 0 1-.8.4L6 8.4a.5.5 0 0 1 0-.8l6.7-4.6a.5.5 0 0 1 .8.4z"/></svg><span class="lbl">最初から</span>
     </button>
     <div class="tinfo">
@@ -540,13 +583,14 @@ footer.time {
   <div class="card keys" role="dialog" aria-labelledby="keys-title">
     <h2 id="keys-title">キー操作</h2>
     <dl>
-      <dt>視点</dt><dd>空いた所をドラッグ（中ボタンでも）：回す ／ Shift+ドラッグ：平行移動 ／ ホイール：拡大<br>1 正面・3 右・7 真上（テンキーも可）／ Home 全体 ／ . 選んだ物に寄る</dd>
-      <dt>選ぶ・動かす</dt><dd>クリック：選ぶ（そのままドラッグで床に沿って移動）／ G 移動・R 回転・S 大きさ<br>操作中：X・Y・Z で軸を固定（もう一度で物の向き、Shift でその軸以外）、数字で値、Tab で次の軸、Enter で確定、Esc で取り消し</dd>
+      <dt>視点</dt><dd>空いた所をドラッグ（中ボタンでも）：回す ／ Shift+ドラッグ：平行移動 ／ ホイール：拡大<br>1 正面・3 右・7 真上（テンキーも可）／ テンキー 4・6・8・2：15° ずつ回す ／ Home 全体 ／ . 選んだ物に寄る</dd>
+      <dt>選ぶ・動かす</dt><dd>クリック：選ぶ（そのままドラッグで床に沿って移動）／ G 移動（画面に沿って）・R 回転・S 大きさ<br>操作中：X・Y・Z で軸を固定（もう一度で物の向き、Shift でその軸以外）、数字で値、Tab で次の軸、Enter で確定、Esc で取り消し</dd>
+      <dt>数値の欄</dt><dd>クリックで入力（6+2 や 2*4 などの式も可、Enter で確定）／ 横にドラッグで増減（Shift で細かく）／ 両端の矢印で 1 段ずつ</dd>
       <dt>戻す</dt><dd>Alt+G 位置を水槽の中央に ／ Alt+R 回転を戻す ／ Alt+S 大きさを最初の値に</dd>
       <dt>追加・削除</dt><dd>Shift+A 追加（ポインタの下に置く）／ Shift+D 複製 ／ Ctrl+C・Ctrl+V コピーと貼り付け ／ X 削除（確認あり）／ Delete すぐ削除 ／ F2 名前を変える ／ 右クリック：その物のメニュー</dd>
       <dt>画面と再生</dt><dd>N 右の欄 ／ T 左の道具 ／ Space 再生・一時停止 ／ → コマ送り ／ Shift+← 最初から</dd>
       <dt>ファイル</dt><dd>Ctrl+S 保存 ／ Ctrl+O 開く ／ Ctrl+Z 元に戻す ／ Ctrl+Shift+Z・Ctrl+Y やり直す</dd>
-      <dt>Blender との違い</dt><dd>上下は Z（Blender と同じ）。選べるのは一度に 1 つです。Ctrl+数字の視点と Ctrl+N はブラウザが使うため使えません。</dd>
+      <dt>Blender との違い</dt><dd>上下は Z（Blender と同じ）。選べるのは一度に 1 つです（A・H はありません）。表示はいつも遠近があり、テンキー 5 の平行投影はありません。Ctrl+数字の視点と Ctrl+N はブラウザが使うため使えません。</dd>
     </dl>
     <button class="btn" id="keys-close" type="button">閉じる</button>
   </div>

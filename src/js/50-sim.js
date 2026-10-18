@@ -107,7 +107,7 @@ class FluidSim {
   }
 
   // a copy of the water (particles, whitewater, counters, ripples, the sources' progress) taken before a reset or a
-  // clear, so that the toast's undo can bring it back exactly
+  // clear, so that undo can bring it back exactly. Only the latest copy is kept; its number tells it apart.
   saveWater() {
     const C = BU.COPY_SRC | BU.COPY_DST;
     const rippleBytes = this.ripple.M * this.ripple.M * 8;
@@ -120,10 +120,13 @@ class FluidSim {
     enc.copyBufferToBuffer(this.ripple.state, 0, s.ripple, 0, rippleBytes);
     device.queue.submit([enc.finish()]);
     s.meta = { time: this.time, count: this.count, wwCount: this.wwCount, impacts: this.impacts, full: this.full, acc: new Map([...this.emitAcc].map(([k, v]) => [k, { ...v }])) };
+    s.id = FluidSim.copies = (FluidSim.copies || 0) + 1;
+    return s.id;
   }
-  restoreWater() {
+  hasWaterCopy(id) { return !!(this.saved && this.saved.meta && this.saved.id === id); }
+  restoreWater(id) {
+    if (!this.hasWaterCopy(id)) return false;
     const s = this.saved;
-    if (!s || !s.meta) return false;
     const enc = device.createCommandEncoder();
     enc.copyBufferToBuffer(s.parts, 0, this.parts[this.cur], 0, this.cap * 32);
     enc.copyBufferToBuffer(s.ww, 0, this.ww[this.wwCur], 0, this.wwCap * 32);

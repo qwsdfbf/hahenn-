@@ -490,8 +490,9 @@ function updateModal(cx, cy, shift) {
       if (s === null || s0 === null || !nearEnough(v3.add(p0, v3.mul(ax, s - s0)), p0)) return;
       moveTo(m, v3.add(p0, v3.mul(ax, snap(s - s0, shift))));
     } else {
-      // without an axis the item slides over the floor plane through it; Shift+axis slides in the plane across it
-      const n = m.axis >= 0 ? modalAxisDir(m, m.axis) : [0, 1, 0];
+      // without an axis the item moves in the plane facing the screen (as in Blender: in a front view, up is up);
+      // Shift+axis moves it in the plane across that axis
+      const n = m.axis >= 0 ? modalAxisDir(m, m.axis) : view.fwd;
       const h0 = rayPlane(rayAt(m.cx, m.cy), p0, n), h = rayPlane(ray, p0, n);
       if (!h0 || !h || !nearEnough(h, p0)) return;
       moveTo(m, v3.add(p0, v3.sub(h, h0).map((x) => snap(x, shift))));
@@ -606,9 +607,23 @@ function zoom(f) {
   cam.dist = clamp(cam.dist * f, 0.06, 8);
   limitCamera();
 }
+// The camera stays above the floor, and above the water while it is over the tank (the water is drawn from above
+// only). The water level is the volume spread over the tank's floor.
 function limitCamera() {
-  const minEl = Math.asin(clamp((0.012 - cam.target[1]) / cam.dist, -1, 1));
+  const t = scene.tank;
+  const over = (el) => {
+    const r = cam.dist * Math.cos(el);
+    return Math.abs(cam.target[0] + r * Math.sin(cam.az)) < t.w / 2 + 0.01 && Math.abs(cam.target[2] + r * Math.cos(cam.az)) < t.d / 2 + 0.01;
+  };
+  const level = sim ? Math.min(sim.count * sim.vp / (t.w * t.d), t.h) : 0;
+  const lowest = (el) => (over(el) ? Math.max(0.012, level + 0.015) : 0.012);
+  // a camera too close to reach above the water straight over the target backs off
+  if (over(Math.PI / 2) && cam.target[1] + cam.dist < lowest(Math.PI / 2)) cam.dist = lowest(Math.PI / 2) - cam.target[1];
+  const minEl = Math.asin(clamp((lowest(cam.el) - cam.target[1]) / cam.dist, -1, 1));
   cam.el = clamp(cam.el, Math.max(minEl, -1.4), 1.5707);
+  // raising the camera can bring it over the tank; check the height again there
+  const minEl2 = Math.asin(clamp((lowest(cam.el) - cam.target[1]) / cam.dist, -1, 1));
+  cam.el = clamp(cam.el, Math.max(minEl2, -1.4), 1.5707);
 }
 const VIEW_PRESETS = {
   front: { az: 0, el: 0.08 },
@@ -762,6 +777,9 @@ function endPointer(e) {
 }
 gpuCanvas.addEventListener('pointerup', endPointer);
 gpuCanvas.addEventListener('pointercancel', endPointer);
+// A tap on the view may open the settings sheet under the finger (phones); the click the browser makes from that
+// tap would then land on the sheet. The view itself works from pointer events only, so its taps make no click.
+gpuCanvas.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 gpuCanvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   camAnim = null;
@@ -806,15 +824,21 @@ function navBallAxes() {
     return { i, s, x: cx + v3.dot(a, view.right) * R, y: cy - v3.dot(a, view.up) * R, z: v3.dot(a, view.fwd.map((q) => -q)) };
   }));
 }
+// radius of an axis dot on the ball: the positive ends are the larger, labelled ones
+function navDotRadius(a) { return (a.s > 0 ? 8.5 : 6.5) * (isCoarse ? 1.25 : 1); }
+// a press on an axis dot looks along that axis, the way the number keys 1 / 3 / 7 do; where dots overlap, the one
+// drawn in front is taken
 function navClick(ev) {
   const vr = $('view').getBoundingClientRect();
   const x = ev.clientX - vr.left, y = ev.clientY - vr.top;
-  let best = null, bd = ev.pointerType === 'mouse' ? 13 : 20;
-  for (const a of navBallAxes()) { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a; } }
-  if (!best) return;
-  const dir = v3.mul(uiAxisDir(best.i), best.s);
-  const el = Math.asin(clamp(dir[1], -1, 1));
-  animateCamera({ el: Math.abs(el) > 1.5 ? Math.sign(el) * 1.5707 : el, az: Math.abs(el) > 1.5 ? cam.az : Math.atan2(dir[0], dir[2]) });
+  const reach = ev.pointerType === 'mouse' ? 3 : 8;
+  const hits = navBallAxes().filter((a) => Math.hypot(a.x - x, a.y - y) <= navDotRadius(a) + reach).sort((p, q) => q.z - p.z);
+  if (!hits.length) return;
+  const { i, s } = hits[0];
+  if (i === 2 && s < 0) { toast('床の下からは見られません', 1600); return; }
+  if (i === 2) { animateCamera({ ...VIEW_PRESETS.top, ...frameAll() }); return; }
+  const dir = v3.mul(uiAxisDir(i), s);
+  animateCamera({ el: VIEW_PRESETS.front.el, az: Math.atan2(dir[0], dir[2]), ...frameAll() });
 }
 
 // ---------- overlay drawing ----------
@@ -970,7 +994,7 @@ function drawOverlay() {
     if (a.s > 0) { octx.strokeStyle = col; octx.lineWidth = 2; octx.beginPath(); octx.moveTo(ncx, ncy); octx.lineTo(a.x, a.y); octx.stroke(); }
     octx.fillStyle = a.s > 0 ? col : 'rgba(30,34,38,0.9)';
     octx.strokeStyle = col; octx.lineWidth = 1.5;
-    octx.beginPath(); octx.arc(a.x, a.y, a.s > 0 ? 8.5 : 6.5, 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
-    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = '600 11px "IBM Plex Mono", monospace'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
+    octx.beginPath(); octx.arc(a.x, a.y, navDotRadius(a), 0, Math.PI * 2); octx.fill(); if (a.s < 0) octx.stroke();
+    if (a.s > 0) { octx.fillStyle = '#16191c'; octx.font = `600 ${isCoarse ? 13 : 11}px "IBM Plex Mono", monospace`; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('XYZ'[a.i], a.x, a.y + 0.5); }
   }
 }

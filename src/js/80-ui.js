@@ -3,13 +3,15 @@
 // ============================================================
 const settings = { playing: true, speed: 1, guides: true, whitewater: true, quality: 'standard' };
 const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+const touchOnly = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 const narrowMQ = window.matchMedia('(max-width: 820px)');
 
 // ---------- undo ----------
 // Each entry is a scene snapshot plus the selection, which follows the user's clicks until the next edit, so that
 // undo comes back with the item that was being edited. `reset` marks a step that replaced the whole scene (a sample,
 // a new scene, an opened file); crossing it with undo or redo also puts the water back to the starting state of the
-// scene it lands on.
+// scene it lands on. `water` marks a step that reset or cleared the water and left the scene as it was: undoing it
+// brings back the copy of the water taken just before, redoing it does the same again.
 const undoStack = [], redoStack = [];
 let current = null;
 function pushUndo(reset = false) {
@@ -22,6 +24,26 @@ function pushUndo(reset = false) {
   updateUndoButtons();
   saveSoon();
 }
+function pushWaterStep(kind, copy) {
+  undoStack.push(current);
+  if (undoStack.length > 120) undoStack.shift();
+  redoStack.length = 0;
+  current = { s: current.s, sel: selectedId, reset: false, water: { kind, copy } };
+  forgetStaleWaterSteps();
+  updateUndoButtons();
+}
+// Only the newest copy of the water is kept, and rebuilding the solver drops it. A water step whose copy is gone has
+// nothing left to undo; as it did not change the scene, it merges into the step before it.
+function forgetStaleWaterSteps() {
+  const stale = (e) => e.water && !sim.hasWaterCopy(e.water.copy);
+  for (let i = undoStack.length - 1; i >= 0; i--) {
+    if (!stale(undoStack[i])) continue;
+    if (i > 0) undoStack.splice(i, 1);
+    else undoStack[0] = { s: undoStack[0].s, sel: undoStack[0].sel, reset: undoStack[0].reset };
+  }
+  if (current && stale(current)) current = undoStack.length ? { ...undoStack.pop(), sel: current.sel } : { s: current.s, sel: current.sel, reset: current.reset };
+  updateUndoButtons();
+}
 function restore(entry, waterToo) {
   const o = JSON.parse(entry.s);
   const tankChanged = JSON.stringify(o.tank) !== JSON.stringify(scene.tank);
@@ -31,7 +53,7 @@ function restore(entry, waterToo) {
   selectedId = entry.sel && (entry.sel === 'tank' || getItem(entry.sel)) ? entry.sel : null;
   current = entry;
   if (tankChanged) rebuildSim(true);
-  else if (waterToo) resetSim(true);
+  else if (waterToo) restartWater();
   sceneChanged(true);
   updateUndoButtons();
   selectionChanged();
@@ -42,6 +64,13 @@ function undo() {
   const from = current;
   const to = undoStack.pop();
   redoStack.push(from);
+  if (from.water) {
+    current = to;
+    sim.restoreWater(from.water.copy);
+    updateUndoButtons();
+    toast(from.water.kind === 'reset' ? '「最初から」を押す前の水に戻しました' : '消す前の水に戻しました', 2200);
+    return;
+  }
   const what = from.reset ? 'シーンを開く前の状態' : describeChange(to.s, from.s);
   restore(to, from.reset);
   toast(from.reset ? `${what}に戻しました` : `${what}を元に戻しました`, 2200);
@@ -51,12 +80,19 @@ function redo() {
   const from = current;
   const to = redoStack.pop();
   undoStack.push(from);
+  if (to.water) {
+    current = to;
+    to.water.copy = waterAction(to.water.kind);
+    forgetStaleWaterSteps();
+    toast(to.water.kind === 'reset' ? '水と時間をもう一度最初の状態に戻しました' : '水槽の水をもう一度すべて消しました', 2200);
+    return;
+  }
   const what = to.reset ? '開いたシーン' : describeChange(from.s, to.s);
   restore(to, to.reset);
   toast(to.reset ? `${what}に戻しました` : `${what}をやり直しました`, 2200);
 }
 // a short name for what differs between two snapshots, for the undo and redo messages
-const FIELD_NAMES = { pos: '位置', rot: '回転', dims: '大きさ', r: '大きさ', name: '名前', color: '色', material: '素材', mode: '出し方', flow: '流量', speed: '勢い', dropD: '粒の直径', dropRate: '間隔', spread: '広がり', burst: '一度に出す量', burstEvery: '繰り返し', rainRate: '雨の強さ', rainSize: '降る範囲', total: '総量', enabled: '水を出す設定', pitch: '水の向き', yaw: '水の向き' };
+const FIELD_NAMES = { pos: '位置', rot: '回転', dims: '大きさ', r: '大きさ', name: '名前', color: '色', material: '素材', mode: '出し方', flow: '流量', speed: '勢い', dropD: '粒の直径', dropRate: '間隔', spread: '広がり', burst: '1回の量', burstEvery: '繰り返し', rainRate: '雨の強さ', rainSize: '降る範囲', total: '総量', enabled: '水を出す設定', pitch: '水の向き', yaw: '水の向き' };
 function describeChange(before, after) {
   const A = JSON.parse(before), B = JSON.parse(after);
   if (JSON.stringify(A.tank) !== JSON.stringify(B.tank)) return '水槽の大きさの変更';
@@ -72,7 +108,11 @@ function describeChange(before, after) {
 function updateUndoButtons() {
   document.querySelectorAll('[data-undo]').forEach((b) => { b.disabled = !undoStack.length; });
   document.querySelectorAll('[data-redo]').forEach((b) => { b.disabled = !redoStack.length; });
+  // a message's undo button belongs to the step it reports; it goes away once the history has moved on
+  const t = $('toast');
+  if (t.step && t.step !== current) { t.classList.remove('show'); t.step = null; }
 }
+function undoAction() { return { label: '元に戻す', run: undo, step: current }; }
 document.querySelectorAll('[data-undo]').forEach((b) => b.addEventListener('click', undo));
 document.querySelectorAll('[data-redo]').forEach((b) => b.addEventListener('click', redo));
 
@@ -82,6 +122,8 @@ function sceneFile() { return { v: 1, app: 'suiri-lab', scene, cam: { target: ca
 
 // ---------- selection & refresh ----------
 // opts.reveal: the selection came from the 3D view, so on narrow screens the settings sheet follows it
+// the newest undo step follows the selection; a change of the scene is recorded (pushUndo) before selecting
+// what it added, so that the step before it keeps what was selected then
 function select(id, opts = {}) {
   selectedId = id;
   if (current) current.sel = id;
@@ -131,7 +173,7 @@ function viewMenu() {
     { label: '白い泡としぶき', check: () => settings.whitewater, act: () => { settings.whitewater = !settings.whitewater; } },
     { sep: true },
     { grp: '計算の細かさ', sub: '細かいほど重くなります' },
-    ...Object.entries(QUALITY).map(([k, q]) => ({ label: q.label, radio: () => settings.quality === k, act: () => setQuality(k) })),
+    ...Object.entries(QUALITY).map(([k, q]) => ({ label: q.label, radio: () => settings.quality === k, act: () => askQuality(k) })),
     { sep: true },
     { grp: '視点' },
     { label: '全体', key: 'Home', act: viewHome },
@@ -141,12 +183,12 @@ function viewMenu() {
     { label: '選んだ物に寄る', key: '.', act: focusSelected },
     { sep: true },
     { label: '使い方を見る', act: showWelcome },
-    { label: 'キー操作の一覧', key: '?', act: showKeys },
+    touchOnly ? null : { label: 'キー操作の一覧', key: '?', act: showKeys },
   ];
 }
 function buildMenu(dd, entries) {
   dd.innerHTML = '';
-  for (const e of entries) {
+  for (const e of entries.filter(Boolean)) {
     if (e.sep) { const s = document.createElement('div'); s.className = 'sep'; dd.appendChild(s); continue; }
     if (e.grp) { const g = document.createElement('div'); g.className = 'grp'; g.textContent = e.grp; if (e.sub) { const t = document.createElement('span'); t.className = 'sub'; t.textContent = e.sub; g.appendChild(t); } dd.appendChild(g); continue; }
     const b = document.createElement('button');
@@ -161,16 +203,23 @@ function buildMenu(dd, entries) {
     dd.appendChild(b);
   }
 }
-const menus = [['m-file', 'dd-file', fileMenu], ['m-add', 'dd-add', addMenu], ['m-view', 'dd-view', viewMenu]];
+const SPEEDS = [[1, '1倍', 'ふつうの速さ'], [0.25, '1/4', 'ゆっくり'], [0.1, '1/10', ''], [0.025, '1/40', 'とてもゆっくり']];
+function speedMenu() {
+  return [{ grp: '再生の速さ' }, ...SPEEDS.map(([v, label, sub]) => ({ label, sub, radio: () => settings.speed === v, act: () => setSpeed(v) }))];
+}
+const menus = [['m-file', 'dd-file', fileMenu], ['m-add', 'dd-add', addMenu], ['m-view', 'dd-view', viewMenu], ['btn-speed', 'dd-speed', speedMenu]];
 function closeMenus() {
   for (const [b, d] of menus) { const dd = $(d); dd.hidden = true; dd.style.cssText = ''; $(b).setAttribute('aria-expanded', 'false'); }
 }
 // opens a menu under its button, or at a point on the screen (Shift+A at the pointer); always kept inside the window.
 // `placeHere`: what gets added from this menu goes on the floor under that point.
 let pendingPlace = null;
+// a menu opened from its button gives the keys back to the button; one opened over the 3D view, to the view
+let menuReturn = gpuCanvas;
 function openMenu(btn, dd, make, at, placeHere) {
   closeMenus();
   pendingPlace = null;
+  menuReturn = at ? gpuCanvas : $(btn);
   if (placeHere && lastPointer) {
     const hit = rayPlane(rayAt(lastPointer[0], lastPointer[1]), [0, 0, 0], [0, 1, 0]);
     if (hit) pendingPlace = [hit[0], hit[2]];
@@ -235,7 +284,7 @@ function footprint(it) {
   if (it.kind === 'source') return it.mode === 'rain' ? it.rainSize / 2 : 0.03;
   return Math.hypot(it.dims.w, it.dims.d) / 2;
 }
-function freeSpot(r, avoidBlocks) {
+function freeSpot(r, avoidBlocks, want = 0.04) {
   const t = scene.tank;
   const others = scene.items.filter((x) => x.kind !== 'block' || avoidBlocks).map((x) => ({ p: x.pos, r: footprint(x) }));
   const mx = Math.max(t.w / 2 - r - 0.01, 0), mz = Math.max(t.d / 2 - r - 0.01, 0);
@@ -244,7 +293,7 @@ function freeSpot(r, avoidBlocks) {
     const x = -mx + (2 * mx * i) / 10, z = -mz + (2 * mz * k) / 8;
     let clear = 1;
     for (const o of others) clear = Math.min(clear, Math.hypot(x - o.p[0], z - o.p[2]) - o.r - r);
-    const score = Math.min(clear, 0.04) * 20 - Math.hypot(x - cam.target[0], z - cam.target[2]);
+    const score = Math.min(clear, want) * 20 - Math.hypot(x - cam.target[0], z - cam.target[2]);
     if (score > bs) { bs = score; best = [x, z]; }
   }
   return best;
@@ -266,7 +315,7 @@ function placeNew(it) {
     it.pos = clampItemPos(it, [sel.pos[0], Math.min(scene.tank.h + 0.08, 0.5), sel.pos[2]]);
     return sel;
   }
-  const [x, z] = freeSpot(footprint(it), it.kind === 'block');
+  const [x, z] = freeSpot(footprint(it), it.kind === 'block', it.kind === 'source' ? 0.15 : 0.04);
   if (it.kind === 'obstacle') { it.pos = [x, 0.3, z]; it.pos[1] += -obstacleBottom(it) + 0.0005; }
   else if (it.kind === 'source') it.pos = [x, Math.min(scene.tank.h + 0.08, 0.5), z];
   else if (it.kind === 'block') it.pos = [x, it.dims.h / 2 + 0.001, z];
@@ -284,8 +333,8 @@ function addItem(it) {
   scene.items.push(it);
   if (sim) sim.setObjects(scene.items, 0);
   if (it.kind === 'block') sim.emitNow(blockEmits(sim, [it], true), true);
-  select(it.id, { reveal: true });
   pushUndo();
+  select(it.id, { reveal: true });
   sceneChanged(true);
   toast(it.kind === 'block' ? `「${it.name}」を追加して水を入れました` : over ? `「${it.name}」を「${over.name}」の上に追加しました` : `「${it.name}」を追加しました`, 2400);
 }
@@ -293,11 +342,12 @@ function deleteSelected() {
   const it = selected();
   if (!it) return;
   scene.items = scene.items.filter((x) => x !== it);
-  select(null);
+  // the step before keeps the item selected, so undo brings it back selected
   pushUndo();
+  select(null);
   sceneChanged(true);
   const msg = it.kind === 'block' ? `「${it.name}」を削除しました（いま水槽にある水はそのままです）` : `「${it.name}」を削除しました`;
-  toast(msg, 4000, { label: '元に戻す', run: undo });
+  toast(msg, 6000, undoAction());
 }
 function duplicateSelected(grab) {
   const it = selected();
@@ -313,8 +363,8 @@ function duplicateSelected(grab) {
     c.pos = clampItemPos(c, [it.pos[0] + side * (2 * r + 0.01), it.pos[1], it.pos[2]]);
   }
   scene.items.push(c);
-  select(c.id);
   pushUndo();
+  select(c.id);
   sceneChanged(true);
   if (c.kind === 'block') sim.emitNow(blockEmits(sim, [c], true), true);
   if (grab && lastPointer) startModal('move', lastPointer[0], lastPointer[1]);
@@ -344,7 +394,7 @@ function replaceScene(s, message) {
   selectionChanged();
   pushUndo(true);
   viewHome();
-  if (message) toast(message, 4000, { label: '元に戻す', run: undo });
+  if (message) toast(message, 6000, undoAction());
 }
 function loadPreset(p, quiet) { replaceScene(p.make(), quiet ? null : `サンプル「${p.label}」を開きました`); }
 function newScene() { replaceScene({ tank: { w: 0.6, h: 0.32, d: 0.4 }, items: [] }, '空の水槽にしました'); }
@@ -425,59 +475,86 @@ function openFile() {
   inp.click();
 }
 
-// ---------- number fields (drag sideways to scrub, tap or type to enter a value) ----------
+// ---------- number fields ----------
+// Drag sideways to change the value (with a range bar, the bar's end follows the pointer), click or tap to type it,
+// press the arrows at the ends to step it. Typed text may be a sum such as 6+2 or 2*4, with the field's unit after it.
 const numberFields = new WeakMap();
-function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, min = -Infinity, max = Infinity, axis = null, prefix = null, zeroText = null, label, fill = null }) {
+function numberField({ get, set, unit = '', typeUnit = unit, scale = 1, digits = 1, step = 0.1, min = -Infinity, max = Infinity, axis = null, prefix = null, zeroText = null, label, bar = null, stuckNote = null }) {
   const el = document.createElement('div');
-  el.className = 'nf';
+  el.className = 'nf' + (bar ? ' has-bar' : '');
   el.tabIndex = 0;
   el.setAttribute('role', 'spinbutton');
   if (label) el.setAttribute('aria-label', label);
-  el.innerHTML = (fill ? '<span class="fill"></span>' : '') + (axis ? `<span class="ax ${axis}">${axis.toUpperCase()}</span>` : '') + (prefix ? '<span class="ax pre"></span>' : '') + '<span class="val"></span>';
+  const arrow = (dir) => `<span class="arr ${dir < 0 ? 'dn' : 'up'}" aria-hidden="true"><svg viewBox="0 0 8 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${dir < 0 ? 'M5.5 2L2 6l3.5 4' : 'M2.5 2L6 6l-3.5 4'}"/></svg></span>`;
+  el.innerHTML = arrow(-1) + (axis ? `<span class="ax ${axis}">${axis.toUpperCase()}</span>` : '') + (prefix ? '<span class="ax pre"></span>' : '') + '<span class="val"></span>' + arrow(1) + (bar ? '<span class="bar"><span class="fill"></span></span>' : '');
   if (prefix) el.querySelector('.pre').textContent = prefix;
   const val = el.querySelector('.val');
   const lim = () => [typeof min === 'function' ? min() : min, typeof max === 'function' ? max() : max];
   const num = (v) => (v * scale).toFixed(digits);
   const fmt = (v) => (zeroText && Math.abs(v) < 1e-9 ? zeroText : num(v) + (unit ? ' ' + unit : ''));
+  const log = bar && bar[2] === 'log';
+  // where the value sits along the bar, 0..1
+  const barPos = (v) => clamp(log ? Math.log(Math.max(v, 1e-12) / bar[0]) / Math.log(bar[1] / bar[0]) : (v - bar[0]) / (bar[1] - bar[0]), 0, 1);
   const render = () => {
     const v = get();
     val.textContent = fmt(v);
     el.setAttribute('aria-valuenow', num(v));
     const [lo, hi] = lim();
     if (Number.isFinite(lo) && Number.isFinite(hi)) el.title = `${label || ''}：${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''}`;
-    if (fill) el.querySelector('.fill').style.width = `${clamp((v - fill[0]) / (fill[1] - fill[0]), 0, 1) * 100}%`;
+    if (bar) el.querySelector('.fill').style.width = `${barPos(v) * 100}%`;
   };
-  // typed values outside the range are brought into it, and the range is shown under the field
+  // typed values outside the range are brought into it, and the range is shown under the field (a range closed to
+  // one value has its own explanation)
   const apply = (v, typed) => {
     const [lo, hi] = lim();
     const c = clamp(v, lo, hi);
     set(c);
     render();
-    if (typed && Math.abs(c - v) > 1e-9) fieldMessage(el, `「${label}」は ${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''} の範囲なので、${fmt(c)} にしました`);
+    if (typed && Math.abs(c - v) > 1e-9) fieldMessage(el, hi - lo < 1e-9 && stuckNote ? stuckNote : `「${label}」は ${num(lo)}〜${num(hi)}${unit ? ' ' + unit : ''} の範囲なので、${fmt(c)} にしました`);
   };
-  // with a bar, the bar's end follows the pointer; without one, 4 px make one step
-  const perPx = () => (fill ? (fill[1] - fill[0]) / Math.max(el.clientWidth, 40) : step / scale / 4);
-  let start = null;
+  const stepBy = (dir, k) => apply(Math.round((get() + dir * (step / scale) * k) / (step / scale) * 1e6) / 1e6 * (step / scale), false);
+  // a drag of dx pixels from the value v0; with a bar the bar's end follows the pointer, without one 4 px make a step
+  const dragged = (v0, dx) => {
+    const w = Math.max(el.clientWidth, 40);
+    if (!bar) return v0 + dx * (step / scale) / 4;
+    if (log) return Math.max(v0, bar[0] * 1e-3) * Math.pow(bar[1] / bar[0], dx / w);
+    return v0 + dx * (bar[1] - bar[0]) / w;
+  };
+  let start = null, holdTimer = 0;
   el.addEventListener('pointerdown', (e) => {
     if (el.querySelector('input') || e.button > 0) return;
-    start = { x: e.clientX, y: e.clientY, v: get(), moved: false, touch: e.pointerType !== 'mouse', t: performance.now(), id: e.pointerId };
-    if (!start.touch) { e.preventDefault(); el.setPointerCapture(e.pointerId); el.focus({ preventScroll: true }); }
+    const a = e.target.closest('.arr');
+    start = { x: e.clientX, y: e.clientY, v: get(), moved: false, touch: e.pointerType !== 'mouse', t: performance.now(), id: e.pointerId, arrow: a ? (a.classList.contains('up') ? 1 : -1) : 0, held: false };
+    // a mouse press keeps the keyboard where it was (the 3D view keeps its keys); a finger may still scroll the panel
+    if (!start.touch) { e.preventDefault(); el.setPointerCapture(e.pointerId); }
+    if (start.arrow) {
+      // holding an arrow keeps stepping
+      const s0 = start;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(function tick() {
+        if (start !== s0 || s0.moved) return;
+        s0.held = true;
+        stepBy(s0.arrow, 1);
+        holdTimer = setTimeout(tick, 70);
+      }, 450);
+    }
   });
   el.addEventListener('pointermove', (e) => {
     if (!start || e.pointerId !== start.id) return;
     const dx = e.clientX - start.x, dy = e.clientY - start.y;
     if (!start.moved) {
       // a finger moving up or down is scrolling the panel; only a clearly sideways drag changes the value
-      if (start.touch && Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { start = null; return; }
+      if (start.touch && Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { start = null; clearTimeout(holdTimer); return; }
       if (Math.abs(dx) < (start.touch ? 10 : 8) || Math.abs(dx) < Math.abs(dy)) return;
       start.moved = true;
+      clearTimeout(holdTimer);
       start.x = e.clientX;
+      start.v = get();
       if (start.touch) el.setPointerCapture(e.pointerId);
       el.classList.add('focus');
       return;
     }
-    const k = e.shiftKey ? 0.1 : 1;
-    let v = start.v + (e.clientX - start.x) * perPx() * k;
+    let v = dragged(start.v, (e.clientX - start.x) * (e.shiftKey ? 0.1 : 1));
     if (e.ctrlKey) v = Math.round(v / (step / scale * 10)) * (step / scale * 10);
     apply(v, false);
   });
@@ -485,65 +562,103 @@ function numberField({ get, set, unit = '', scale = 1, digits = 1, step = 0.1, m
     if (!start || e.pointerId !== start.id) return;
     const s = start;
     start = null;
+    clearTimeout(holdTimer);
     el.classList.remove('focus');
-    if (s.moved) pushUndo();
-    else if (!s.touch) edit('');
-    else if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < 10 && performance.now() - s.t < 700) {
-      // a finger on the bar sets the value there; on the number it opens the keyboard
-      const r = el.getBoundingClientRect();
-      const f = (e.clientX - r.left) / r.width;
-      if (fill && f < 0.5) { apply(fill[0] + f * (fill[1] - fill[0]), false); pushUndo(); }
-      else edit('');
-    }
+    if (s.moved || s.held) pushUndo();
+    else if (s.arrow) { stepBy(s.arrow, e.shiftKey ? 10 : 1); pushUndo(); }
+    else if (!s.touch || (Math.hypot(e.clientX - s.x, e.clientY - s.y) < 10 && performance.now() - s.t < 700)) edit('', true);
   });
-  el.addEventListener('pointercancel', () => { start = null; el.classList.remove('focus'); });
-  function edit(initial) {
+  el.addEventListener('pointercancel', () => { start = null; clearTimeout(holdTimer); el.classList.remove('focus'); });
+  // byPointer: typing started with a click or a tap, so afterwards the keys go back to where they were before (the
+  // 3D view); typing started from the keyboard keeps the focus on the field
+  function edit(initial, byPointer) {
     if (el.querySelector('input')) return;
+    const back = byPointer ? document.activeElement : el;
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.inputMode = 'decimal';
     inp.enterKeyHint = 'done';
     inp.value = initial || num(get());
+    el.classList.add('editing');
+    let u = null;
+    if (unit) { u = document.createElement('span'); u.className = 'unit'; u.textContent = unit; el.appendChild(u); }
     el.appendChild(inp);
+    if (u) inp.style.paddingRight = `${u.offsetWidth + 14}px`;
     inp.focus();
     if (initial) inp.setSelectionRange(inp.value.length, inp.value.length); else inp.select();
+    if (zeroText && !zeroText.startsWith('0')) fieldMessage(el, `0 を入れると「${zeroText}」になります`);
     let done = false;
-    const finish = (ok) => {
+    const finish = (ok, refocus) => {
       if (done) return;
       done = true;
-      if (ok) {
-        const n = parseFloat(inp.value.replace(/,/g, '.').replace(/[^0-9.+\-eE]/g, ''));
-        if (Number.isFinite(n) && Math.abs(n / scale - get()) > 1e-12) { apply(n / scale, true); pushUndo(); }
-      }
+      const text = inp.value.trim();
       inp.remove();
+      if (u) u.remove();
+      el.classList.remove('editing');
+      if (ok && text && text !== num(get())) {
+        const n = parseTyped(text, typeUnit);
+        if (n === null) fieldMessage(el, `「${text}」は数として読めなかったので、値は変えていません`);
+        else if (Math.abs(n / scale - get()) > 1e-12) { apply(n / scale, true); pushUndo(); }
+      }
       render();
+      if (refocus) {
+        if (back && back !== document.body && document.contains(back)) back.focus({ preventScroll: true });
+        else gpuCanvas.focus({ preventScroll: true });
+      }
     };
     inp.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') { e.preventDefault(); finish(true); el.focus({ preventScroll: true }); }
-      else if (e.key === 'Escape') { e.preventDefault(); finish(false); el.focus({ preventScroll: true }); }
+      if (e.key === 'Enter') { e.preventDefault(); finish(true, true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false, true); }
       else if (e.key === 'Tab') {
         // like Blender: Tab commits and goes on typing in the next field
         e.preventDefault();
-        finish(true);
+        finish(true, false);
         const all = [...$('props').querySelectorAll('.nf')];
         const next = all[all.indexOf(el) + (e.shiftKey ? -1 : 1)];
-        if (next) { next.focus({ preventScroll: true }); numberFields.get(next).edit(''); } else el.focus({ preventScroll: true });
+        if (next) { next.focus({ preventScroll: true }); numberFields.get(next).edit('', false); } else el.focus({ preventScroll: true });
       }
     });
-    inp.addEventListener('blur', () => finish(true));
+    inp.addEventListener('blur', () => finish(true, false));
   }
+  // with the field focused from the keyboard: Enter or a digit starts typing, the arrow keys step
   el.addEventListener('keydown', (e) => {
     if (el.querySelector('input') || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); edit(''); }
-    else if (/^[0-9.\-]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); edit(e.key); }
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); apply(get() + (step / scale) * (e.shiftKey ? 10 : 1), false); pushUndo(); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); apply(get() - (step / scale) * (e.shiftKey ? 10 : 1), false); pushUndo(); }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); edit('', false); }
+    else if (/^[0-9.\-]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); edit(e.key, false); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); stepBy(1, e.shiftKey ? 10 : 1); pushUndo(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); stepBy(-1, e.shiftKey ? 10 : 1); pushUndo(); }
   });
   render();
   el.refresh = render;
   numberFields.set(el, { edit });
   return el;
+}
+// A typed number or a sum of numbers (+ - * / and brackets; full-width characters, × and ÷ are read too). A unit
+// may follow when it is the field's own. Returns null for anything else.
+function parseTyped(text, unit) {
+  let t = text.normalize('NFKC').replace(/[−‐–—]/g, '-').replace(/[×✕]/g, '*').replace(/÷/g, '/').replace(/,/g, '.').replace(/\s+/g, '');
+  const u = (unit || '').normalize('NFKC').replace(/\s+/g, '');
+  if (u && t.endsWith(u)) t = t.slice(0, -u.length);
+  let i = 0;
+  const fail = () => { throw new SyntaxError(t); };
+  const factor = () => {
+    if (t[i] === '-') { i++; return -factor(); }
+    if (t[i] === '+') { i++; return factor(); }
+    if (t[i] === '(') { i++; const v = sum(); if (t[i++] !== ')') fail(); return v; }
+    const m = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(t.slice(i));
+    if (!m) fail();
+    i += m[0].length;
+    return parseFloat(m[0]);
+  };
+  const product = () => { let v = factor(); while (t[i] === '*' || t[i] === '/') { const op = t[i++]; const w = factor(); v = op === '*' ? v * w : v / w; } return v; };
+  const sum = () => { let v = product(); while (t[i] === '+' || t[i] === '-') { const op = t[i++]; const w = product(); v = op === '+' ? v + w : v - w; } return v; };
+  try {
+    const v = sum();
+    return i === t.length && Number.isFinite(v) ? v : null;
+  } catch (e) {
+    return null;
+  }
 }
 // a short note under a field, removed after a while
 function fieldMessage(field, text) {
@@ -561,15 +676,27 @@ function row(labelText, control, small) {
   l.className = 'lbl';
   l.textContent = labelText;
   if (small) { const s = document.createElement('small'); s.textContent = small; l.appendChild(s); }
+  // three fields side by side need the whole width; their label goes above them
+  if (control.classList.contains('trio')) r.classList.add('stack');
   r.append(l, control);
   return r;
 }
 function group(title, ...rows) {
   const g = document.createElement('div');
   g.className = 'pgroup';
-  if (title) { const h = document.createElement('h3'); h.textContent = title; g.appendChild(h); }
+  if (title instanceof Element) g.appendChild(title);
+  else if (title) { const h = document.createElement('h3'); h.textContent = title; g.appendChild(h); }
   g.append(...rows.filter(Boolean));
   return g;
+}
+// a group title with a control at its end
+function headLine(title, control) {
+  const d = document.createElement('div');
+  d.className = 'ghead';
+  const h = document.createElement('h3');
+  h.textContent = title;
+  d.append(h, control);
+  return d;
 }
 function trio(fields) { const d = document.createElement('div'); d.className = 'trio'; d.append(...fields); return d; }
 function segmented(options, get, set, label) {
@@ -604,7 +731,8 @@ const AXIS_WORDS = ['左右', '前後', '高さ'];
 // position in the editor's axes (X right, Y away, Z up)
 function posFields(it) {
   return trio([0, 1, 2].map((i) => numberField({
-    ...CM, unit: '', axis: 'xyz'[i], label: `位置 ${'XYZ'[i]}（${AXIS_WORDS[i]}, cm）`,
+    ...CM, unit: '', typeUnit: 'cm', axis: 'xyz'[i], label: `位置 ${'XYZ'[i]}（${AXIS_WORDS[i]}, cm）`,
+    stuckNote: `「${it.name}」は水槽より大きいので、${AXIS_WORDS[i]}（${'XYZ'[i]}）には動かせません（水槽の中央に置いています）`,
     get: () => toUI(it.pos)[i],
     set: (v) => { const u = toUI(it.pos); u[i] = v; it.pos = clampItemPos(it, fromUI(u)); sceneChanged(false); },
     min: () => uiPosLimit(it, i)[0], max: () => uiPosLimit(it, i)[1],
@@ -618,7 +746,7 @@ function uiPosLimit(it, i) {
 }
 function rotFields(it) {
   return trio([0, 1, 2].map((i) => numberField({
-    unit: '', digits: 0, step: 1, axis: 'xyz'[i], label: `回転 ${'XYZ'[i]}（度）`,
+    unit: '', typeUnit: '°', digits: 0, step: 1, axis: 'xyz'[i], label: `回転 ${'XYZ'[i]}（度）`,
     get: () => uiEuler(it.rot)[i],
     set: (v) => { const u = uiEuler(it.rot); u[i] = ((v % 360) + 540) % 360 - 180; it.rot = worldEuler(u).map((x) => Math.round(x * 100) / 100); sceneChanged(false); },
   })));
@@ -652,6 +780,8 @@ function buildProps() {
   const host = $('props');
   host.innerHTML = '';
   const title = $('props-title');
+  // on phones the panel's own title is hidden and the tab names what is being set
+  $('tab-props').textContent = selectedId === 'tank' ? '水槽の設定' : selected() ? `${selected().name}の設定` : '設定';
   if (selectedId === 'tank') {
     title.textContent = '水槽';
     headerActions([]);
@@ -659,7 +789,7 @@ function buildProps() {
     const tankField = (k, lbl, lo, hi) => numberField({ ...CM, label: lbl, get: () => t[k], set: (v) => { t[k] = v; tankEdited(); }, min: lo, max: hi });
     host.append(
       group('大きさ', row('幅', tankField('w', '幅', 0.2, 1.2), 'X'), row('奥行き', tankField('d', '奥行き', 0.15, 1.0), 'Y'), row('高さ', tankField('h', '高さ', 0.1, 0.6), 'Z')),
-      group('計算の細かさ', segmented(Object.entries(QUALITY).map(([k, q]) => [k, q.label]), () => settings.quality, setQuality, '計算の細かさ'),
+      group('計算の細かさ', segmented(Object.entries(QUALITY).map(([k, q]) => [k, q.label]), () => settings.quality, askQuality, '計算の細かさ'),
         noteEl('細かいほど細い水流や小さなしぶきまで表せますが、動きは重くなります。')),
       noteEl('大きさや計算の細かさを変えると、水は最初の状態から計算し直します。'),
       actions([['水を最初の状態に戻す', () => resetSim()], ['水をすべて消す', clearAllWater, 'danger']]),
@@ -702,38 +832,40 @@ function buildProps() {
     host.appendChild(group('見た目', row('素材', segmented(Object.entries(MATERIALS).map(([k, m]) => [k, m.label]), () => it.material, (k) => { it.material = k; }, '素材')), row('色', sw)));
     host.appendChild(nameRow(it));
   } else if (it.kind === 'source') {
-    host.appendChild(group(null, toggle(() => it.enabled, (v) => { it.enabled = v; }, '水を出す')));
-    host.appendChild(group('出し方', segmented(Object.entries(SOURCE_MODES).map(([k, m]) => [k, m.label]), () => it.mode, (k) => setSourceMode(it, k), '出し方')));
+    // the switch shares a line with the way the water comes out, so that the amounts follow close below
+    host.appendChild(group(headLine('出し方', toggle(() => it.enabled, (v) => { it.enabled = v; }, '水を出す')), segmented(Object.entries(SOURCE_MODES).map(([k, m]) => [k, m.label]), () => it.mode, (k) => setSourceMode(it, k), '出し方')));
     const amount = [];
     const F = (lbl, key, o) => row(lbl, numberField({ label: lbl, get: () => it[key], set: (v) => { it[key] = v; liveRefresh(); }, ...o }));
     if (it.mode === 'stream' || it.mode === 'shower') {
+      amount.push(F('流量', 'flow', { unit: 'L/分', digits: 2, step: 0.05, min: 0.05, max: 40, bar: [0, 10] }));
+      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0.05, max: 12, bar: [0, 4] }));
       if (it.mode === 'stream') {
-        const quick = [['ちょろちょろ', 0.6, 0.35], ['ふつう', 4, 0.7], ['勢いよく', 12, 1.6]];
-        amount.push(row('目安', actions(quick.map(([lbl, f, v]) => [lbl, () => { it.flow = f; it.speed = v; pushUndo(); refreshPanels(); }]))));
+        // the preset that matches the current flow and speed is shown as chosen
+        const quick = { low: ['ちょろちょろ', 0.6, 0.35], mid: ['ふつう', 4, 0.7], high: ['勢いよく', 12, 1.6] };
+        const now = () => Object.keys(quick).find((k) => Math.abs(it.flow - quick[k][1]) < 1e-6 && Math.abs(it.speed - quick[k][2]) < 1e-6) || null;
+        amount.push(row('目安', segmented(Object.entries(quick).map(([k, q]) => [k, q[0]]), now, (k) => { it.flow = quick[k][1]; it.speed = quick[k][2]; }, '水の出方の目安')));
       }
-      amount.push(F('流量', 'flow', { unit: 'L/分', digits: 2, step: 0.05, min: 0.05, max: 40, fill: [0, 10] }));
-      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0.05, max: 12, fill: [0, 4] }));
       if (it.mode === 'stream') {
         // the outlet diameter follows from flow and speed; setting it keeps the speed and changes the flow
         const n = noteEl('');
         n.dataset.live = 'nozzle';
         amount.push(foldout('出口の太さ', [row('太さ', numberField({ unit: 'mm', scale: 1000, digits: 1, step: 0.1, label: '出口の太さ', get: () => sourceNozzle(it), set: (d) => { it.flow = clamp((Math.PI * d * d / 4) * Math.max(it.speed, 0.05) * 60000, 0.05, 40); liveRefresh(); }, min: 0.001, max: 0.12 })), n]));
-      } else amount.push(F('広がり', 'spread', { unit: '°', digits: 0, step: 1, min: 0, max: 80 }));
+      } else amount.push(F('広がり', 'spread', { unit: '°', digits: 0, step: 1, min: 0, max: 80, bar: [0, 80] }));
     } else if (it.mode === 'drops') {
-      amount.push(F('粒の直径', 'dropD', { unit: 'mm', digits: 1, step: 0.1, min: 1, max: 40, fill: [1, 15] }));
-      amount.push(row('間隔', numberField({ unit: '秒', digits: 2, step: 0.01, label: '落ちる間隔', get: () => 1 / it.dropRate, set: (v) => { it.dropRate = 1 / v; }, min: 1 / 60, max: 20 })));
-      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, fill: [0, 4], zeroText: '0（自然に落ちる）' }));
+      amount.push(F('粒の直径', 'dropD', { unit: 'mm', digits: 1, step: 0.1, min: 1, max: 40, bar: [1, 15] }));
+      amount.push(row('間隔', numberField({ unit: '秒', digits: 2, step: 0.01, label: '落ちる間隔', get: () => 1 / it.dropRate, set: (v) => { it.dropRate = 1 / v; }, min: 1 / 60, max: 20, bar: [0.05, 5, 'log'] })));
+      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, bar: [0, 4], zeroText: '0（自然に落ちる）' }));
       const n = noteEl('');
       n.dataset.live = 'drop';
       amount.push(n);
     } else if (it.mode === 'burst') {
-      amount.push(F('一度に出す量', 'burst', { unit: 'L', digits: 2, step: 0.01, min: 0.01, max: 50, fill: [0, 2] }));
-      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, fill: [0, 4] }));
+      amount.push(F('1回の量', 'burst', { unit: 'L', digits: 2, step: 0.01, min: 0.01, max: 50, bar: [0, 2] }));
+      amount.push(F('勢い', 'speed', { unit: 'm/s', digits: 2, step: 0.05, min: 0, max: 12, bar: [0, 4] }));
       amount.push(F('繰り返し', 'burstEvery', { unit: '秒ごと', digits: 1, step: 0.1, min: 0, max: 60, zeroText: '1回だけ' }));
       amount.push(actions([['今すぐ出す', () => { fireBurst(it); toast(`「${it.name}」から ${it.burst.toFixed(2)} L 出しました`, 1600); }, 'primary']]));
     } else if (it.mode === 'rain') {
-      amount.push(F('雨の強さ', 'rainRate', { unit: 'mm/時', digits: 0, step: 1, min: 1, max: 500, fill: [0, 200] }));
-      amount.push(row('降る範囲', numberField({ ...CM, label: '降る範囲（一辺）', get: () => it.rainSize, set: (v) => { it.rainSize = v; sceneChanged(false); }, min: 0.05, max: 2 })));
+      amount.push(F('雨の強さ', 'rainRate', { unit: 'mm/時', digits: 0, step: 1, min: 1, max: 500, bar: [0, 200] }));
+      amount.push(row('降る範囲', numberField({ ...CM, label: '降る範囲（一辺）', get: () => it.rainSize, set: (v) => { it.rainSize = v; sceneChanged(false); }, min: 0.05, max: 2, bar: [0, 1.2] })));
     }
     if (it.mode !== 'burst') amount.push(F('総量', 'total', { unit: 'L', digits: 2, step: 0.05, min: 0, max: 100, zeroText: '無制限' }));
     const n2 = noteEl('');
@@ -836,9 +968,15 @@ function fireBurst(it) {
   st.timer = it.burstEvery > 0 ? it.burstEvery : 0;
 }
 function clearAllWater() {
-  sim.saveWater();
-  sim.clearWater();
-  toast('水槽の水をすべて消しました', 5000, { label: '元に戻す', run: restoreWaterNow });
+  pushWaterStep('clear', waterAction('clear'));
+  toast('水槽の水をすべて消しました', 6000, undoAction());
+}
+// the solver is rebuilt for another resolution and the water starts over, so once the water has moved the change
+// waits for a yes
+function askQuality(k) {
+  if (settings.quality === k) return;
+  if (sim.time < 0.05) { setQuality(k); return; }
+  toast(`計算の細かさを「${QUALITY[k].label}」にすると、水は最初の状態から計算し直します`, 6000, { label: '変える', run: () => setQuality(k) });
 }
 function setQuality(k) {
   if (settings.quality === k) return;
@@ -928,6 +1066,7 @@ $('btn-reset').addEventListener('click', () => resetSim());
 function setSpeed(s) {
   settings.speed = s;
   document.querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.speed === s)));
+  $('speed-now').textContent = SPEEDS.find(([v]) => v === s)[1];
 }
 document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
 function timeText(t) { return t.toFixed(settings.speed >= 1 ? 2 : settings.speed >= 0.25 ? 3 : 4) + ' s'; }
@@ -1030,7 +1169,9 @@ function updateSheetSizeButton() {
 }
 $('btn-side').addEventListener('click', () => { if ($('side').classList.contains('open')) closeSheet(); else { openSheet(); sheet.auto = false; } });
 $('btn-side-close').addEventListener('click', closeSheet);
-$('btn-side-size').addEventListener('click', () => { $('side').style.height = ''; $('side').classList.toggle('tall'); sheet.auto = false; updateSheetSizeButton(); });
+function toggleSheetSize() { $('side').style.height = ''; $('side').classList.toggle('tall'); sheet.auto = false; updateSheetSizeButton(); }
+$('btn-side-size').addEventListener('click', toggleSheetSize);
+$('sheet-grab').addEventListener('click', toggleSheetSize);
 document.querySelectorAll('.sheet-head [data-tab]').forEach((b) => b.addEventListener('click', () => setSheetTab(b.dataset.tab)));
 
 // the boundary between the scene list and the settings can be dragged on wide screens
@@ -1053,7 +1194,7 @@ function updateHint() {
   if (m) {
     const nm = { move: '移動', rotate: '回転', scale: '大きさ' }[m.type];
     const space = m.local ? '物の' : '';
-    const ax = m.axis < 0 ? '' : m.exclude ? `　<b>${'XYZ'[m.axis]} 以外で${m.type === 'scale' ? '変える' : '動かす'}</b>` : `　<b>${space}${'XYZ'[m.axis]}（${AXIS_WORDS[m.axis]}）に固定</b>`;
+    const ax = m.axis < 0 ? (m.type === 'move' ? '　画面に沿って動かす' : '') : m.exclude ? `　<b>${'XYZ'[m.axis]} 以外で${m.type === 'scale' ? '変える' : '動かす'}</b>` : `　<b>${space}${'XYZ'[m.axis]}（${AXIS_WORDS[m.axis]}）に固定</b>`;
     let typed = '';
     if (m.typing) {
       const unit = m.type === 'move' ? ' cm' : m.type === 'rotate' ? '°' : ' 倍';
@@ -1090,6 +1231,7 @@ function confirmDelete() {
   if (!it) return;
   const at = lastPointer ? clientFromLocal(lastPointer) : null;
   closeMenus();
+  menuReturn = gpuCanvas;
   const dd = $('dd-add');
   buildMenu(dd, [{ grp: `「${it.name}」を削除しますか？` }, { label: '削除する', act: deleteSelected }, { label: 'やめる', act: () => {} }]);
   dd.hidden = false;
@@ -1142,6 +1284,7 @@ function renameSelected() {
 // right click in the 3D view
 function openContextMenu(x, y, it) {
   closeMenus();
+  menuReturn = gpuCanvas;
   const dd = $('dd-add');
   const list = it ? [
     { grp: it.name },
@@ -1164,6 +1307,14 @@ function openContextMenu(x, y, it) {
 }
 const VIEW_KEYS = { 1: 'front', 3: 'side', 7: 'top' };
 const NUMPAD_VIEWS = { Numpad1: 'front', Numpad3: 'side', Numpad7: 'top' };
+// 15° turns, as in Blender: 4 and 6 around the vertical, 8 and 2 up and down
+const NUMPAD_ORBIT = { Numpad4: [Math.PI / 12, 0], Numpad6: [-Math.PI / 12, 0], Numpad8: [0, -Math.PI / 12], Numpad2: [0, Math.PI / 12] };
+const MISSING_KEYS = {
+  Numpad5: 'テンキー 5 の平行投影はありません（いつも遠近のある表示です）',
+  h: 'H（隠す）はありません。見えなくしたい物は削除してください（Ctrl+Z で戻せます）',
+  a: 'A（すべて選ぶ）はありません。選べるのは一度に 1 つです',
+  'Ctrl+a': 'Ctrl+A（適用）はありません。大きさや回転はそのまま計算に使われます',
+};
 window.addEventListener('keydown', (e) => {
   const tgt = e.target;
   if (tgt instanceof HTMLInputElement || tgt instanceof HTMLTextAreaElement) return;
@@ -1186,15 +1337,23 @@ window.addEventListener('keydown', (e) => {
   // Space plays and pauses wherever the focus is (buttons are pressed with Enter)
   if (k === ' ') { e.preventDefault(); setPlaying(!settings.playing); return; }
   if (k === 'Escape') {
+    // Esc closes what is open; only with nothing open does it clear the selection
     if (!$('welcome').hidden) { $('welcome-ok').click(); return; }
     if (!$('keys').hidden) { $('keys').hidden = true; return; }
-    closeMenus(); if (selectedId !== null) select(null); return;
+    if (!$('scene-text').hidden) { $('scene-text').hidden = true; return; }
+    if (menus.some(([, d]) => !$(d).hidden)) { closeMenus(); menuReturn.focus({ preventScroll: true }); return; }
+    if (selectedId !== null) select(null);
+    return;
   }
   if (k === 'F1' || k === '?') { e.preventDefault(); showKeys(); return; }
   // the remaining keys act on the 3D view; inside the panels and menus they keep their usual meaning
   if (tgt instanceof Element && tgt.closest('aside, .dropdown')) return;
   // the number pad works whether Num Lock is on or off
   if (NUMPAD_VIEWS[e.code]) { e.preventDefault(); animateCamera({ ...VIEW_PRESETS[NUMPAD_VIEWS[e.code]], ...frameAll() }); return; }
+  if (NUMPAD_ORBIT[e.code]) { e.preventDefault(); const [daz, del] = NUMPAD_ORBIT[e.code]; animateCamera({ az: cam.az + daz, el: clamp(cam.el + del, -0.2, 1.5707) }); return; }
+  // Blender keys this editor does not have say so instead of doing nothing (Ctrl+A would select the page's text)
+  const missing = MISSING_KEYS[(ctrl ? 'Ctrl+' : '') + (e.code === 'Numpad5' ? 'Numpad5' : k.length === 1 ? k.toLowerCase() : '')];
+  if (missing && !e.altKey && !e.shiftKey) { e.preventDefault(); toast(missing, 2600); return; }
   if (e.code === 'NumpadDecimal') { e.preventDefault(); focusSelected(); return; }
   if (ctrl && (k === 'c' || k === 'C')) { if (selected()) { e.preventDefault(); copySelected(); } return; }
   if (ctrl && (k === 'v' || k === 'V')) { e.preventDefault(); pasteItem(); return; }
@@ -1235,7 +1394,7 @@ $('keys-close').addEventListener('click', () => { $('keys').hidden = true; });
 // ---------- first visit ----------
 function showWelcome() {
   const steps = isCoarse ? [
-    '<b>1本指でなぞる</b>と視点が回り、<b>2本指</b>で拡大・平行移動できます。',
+    '<b>1本指でなぞる</b>と視点が回り、<b>2本指</b>で拡大・平行移動できます。右上の<b>家の形のボタン</b>で全体が見える向きに戻ります。',
     '<b>物や水源をタップ</b>すると、下に出る「設定」で水の量や勢い、大きさを変えられます。',
     '選んだ物の<b>矢印や輪をなぞる</b>と、動かしたり回したりできます。',
     '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。この案内は「表示」メニューからもう一度見られます。',
@@ -1245,7 +1404,7 @@ function showWelcome() {
     '選んだ物の<b>本体や矢印をドラッグ</b>すると、動かしたり回したりできます。',
     '<b>＋追加</b>で物・水源・水を置き、<b>ファイル</b>からサンプルを開けます。',
   ];
-  steps.push('下の<b>再生</b>で水が流れ、<b>最初から</b>で水を最初の状態に戻せます。');
+  steps.push('水は開いたときから流れています。下の<b>一時停止</b>で止め、<b>最初から</b>で水を最初の状態に戻せます。');
   $('welcome-steps').innerHTML = steps.map((s) => `<li>${s}</li>`).join('');
   $('welcome-extra').textContent = isCoarse ? '' : 'Blender と同じキー操作（G・R・S、Shift+A など）にも対応しています。この案内は「表示」メニューの「使い方を見る」でもう一度見られます。';
   $('welcome').hidden = false;
