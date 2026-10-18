@@ -202,10 +202,34 @@ def water_material(tank):
     a = max(ABSORB)
     vol.inputs['Color'].default_value = tuple(1 - x / a for x in ABSORB) + (1.0,)
     vol.inputs['Density'].default_value = a
-    nt.links.new(vol.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
+    # Cycles takes the colour out along the path through the water; EEVEE gets the surface only (Blender 4.0's EEVEE
+    # cannot compile a Principled BSDF together with a volume)
+    out = nt.nodes['Material Output']
+    out.target = 'CYCLES'
+    nt.links.new(vol.outputs[0], out.inputs['Volume'])
+    ev = nt.nodes.new('ShaderNodeOutputMaterial'); ev.target = 'EEVEE'; ev.location = (out.location.x, out.location.y - 250)
+    nt.links.new(bsdf.outputs[0], ev.inputs['Surface'])
+    _refracting(m)
+    return m
+
+
+def _refracting(m):
+    """Let EEVEE show what lies behind a transmitting material (screen space in 4.0/4.1, ray traced from 4.2), and
+    let sunlight through it (the light under water is drawn by the light pattern of the floor)."""
+    if hasattr(m, 'shadow_method'):
+        m.shadow_method = 'NONE'
     if hasattr(m, 'use_screen_refraction'):
         m.use_screen_refraction = True
-    return m
+    if hasattr(m, 'use_raytrace_refraction'):
+        m.use_raytrace_refraction = True
+
+
+def eevee_settings(scene):
+    """EEVEE's scene options that refraction needs (Blender's own settings, left as they are for Cycles)."""
+    ee = scene.eevee
+    for attr in ('use_ssr', 'use_ssr_refraction', 'use_raytracing'):
+        if hasattr(ee, attr):
+            setattr(ee, attr, True)
 
 
 def glass_material():
@@ -217,8 +241,15 @@ def glass_material():
         b.inputs['Roughness'].default_value = 0.0
         b.inputs['IOR'].default_value = 1.5
         b.inputs['Transmission Weight'].default_value = 1.0
-        if hasattr(m, 'use_screen_refraction'):
-            m.use_screen_refraction = True
+        _refracting(m)
+        # the walls are thin sheets, not solid blocks of glass (EEVEE from 4.2)
+        if hasattr(m, 'thickness_mode'):
+            m.thickness_mode = 'SLAB'
+            out = m.node_tree.nodes['Material Output']
+            if 'Thickness' in out.inputs:
+                th = m.node_tree.nodes.new('ShaderNodeValue'); th.outputs[0].default_value = 0.005
+                th.location = (out.location.x - 200, out.location.y - 200)
+                m.node_tree.links.new(th.outputs[0], out.inputs['Thickness'])
     return m
 
 
@@ -278,6 +309,7 @@ def make_tank(context, w=0.6, d=0.4, h=0.32, location=(0, 0, 0)):
     me.materials.append(glass_material())
     me.materials.append(surface_material('水理ラボ 水槽の底 ' + tank.name, (0.78, 0.76, 0.72, 1), 'stone', tank))
     tank.visible_shadow = False
+    eevee_settings(context.scene)
     wme = bpy.data.meshes.new('水')
     water = _new_object(context, '水', wme, tank)
     water['suiri_part'] = 'water'
