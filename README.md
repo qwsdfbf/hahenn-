@@ -24,3 +24,7 @@
 ## ソース
 
 `src/shell.html` と `src/js/*.js` を `node build.mjs` で 1 つの `index.html` にまとめています。
+
+## Blender アドオン
+
+同じ計算を Blender の中で使えるアドオンを `blender_addon/` に置いています（入れ方と使い方は `blender_addon/README.md`、インストール用は `blender_addon/suiri_lab.zip`）。
